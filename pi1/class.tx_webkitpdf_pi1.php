@@ -198,7 +198,6 @@ class tx_webkitpdf_pi1 extends tslib_pibase {
 			'margin-bottom' => '15mm',
 		);
 		
-		$scriptParams = array();
 		$tsSettings = $this->conf['scriptParams'];
 		foreach($defaultSettings as $param => $value) {
 			if(!isset($tsSettings[$param])) {
@@ -240,8 +239,8 @@ class tx_webkitpdf_pi1 extends tslib_pibase {
 
 		$userSettings = $this->readScriptSettings();
 		$options = array_merge($options, $userSettings);
-		
-		$paramString = '';
+
+		$paramsString = '';
 		foreach($options as $param => $value) {
 			if(strlen($value) > 0) {
 				$value = '"' . $value . '"';
