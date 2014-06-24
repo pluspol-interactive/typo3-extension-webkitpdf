@@ -39,6 +39,9 @@ class tx_webkitpdf_pi1 extends tslib_pibase {
 	public $pi_checkCHash = FALSE;
 	public $pi_USER_INT_obj = 1;
 
+	/**
+	 * @var tx_webkitpdf_cache
+	 */
 	protected $cacheManager;
 	protected $scriptPath;
 	protected $outputPath;
