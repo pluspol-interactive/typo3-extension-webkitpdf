@@ -72,12 +72,19 @@ class tx_webkitpdf_pi1 extends tslib_pibase {
 		if($this->conf['customScriptPath']) {
 			$this->scriptPath = $this->conf['customScriptPath'];
 		}
-		$this->outputPath = t3lib_div::getIndpEnv('TYPO3_DOCUMENT_ROOT');
-		if($this->conf['customTempOutputPath']) {
-			$this->outputPath .= tx_webkitpdf_utils::sanitizePath($this->conf['customTempOutputPath']);
+
+		if ($this->conf['customTempOutputPath']) {
+			$this->outputPath = tx_webkitpdf_utils::sanitizePath($this->conf['customTempOutputPath']);
 		} else {
-			$this->outputPath .= '/typo3temp/tx_webkitpdf/';
+			$this->outputPath = '/typo3temp/tx_webkitpdf/';
 		}
+
+		$documentRoot = t3lib_div::getIndpEnv('TYPO3_DOCUMENT_ROOT');
+		$absoluteOutputPath = $documentRoot . $this->outputPath;
+		if (!@is_dir($absoluteOutputPath)) {
+			\TYPO3\CMS\Core\Utility\GeneralUtility::mkdir_deep($documentRoot, $this->outputPath);
+		}
+		$this->outputPath = $absoluteOutputPath;
 
 		$this->paramName = 'urls';
 		if($this->conf['customParameterName']) {
