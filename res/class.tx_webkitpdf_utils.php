@@ -11,13 +11,15 @@ class tx_webkitpdf_utils {
 	static public function wrapUriName($inputName) {
 		return escapeshellarg($inputName);
 	}
-	
+
 	/**
-	 * Checks if the given URL's host matches the current host 
+	 * Checks if the given URL's host matches the current host
 	 * and sanitizes the URL to be used on command line.
 	 *
-	 * @param   string  $url The URL to be sanitized
-	 * @return  string  The sanitized URL
+	 * @param string $url The URL to be sanitized
+	 * @param array $allowedHosts
+	 * @throws Exception
+	 * @return string The sanitized URL
 	 */
 	static public function sanitizeURL($url, $allowedHosts) {
 		
