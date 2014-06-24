@@ -247,6 +247,11 @@ class tx_webkitpdf_pi1 extends tslib_pibase {
 			}
 			$paramsString .= ' ' . $param . ' ' . $value; 
 		}
+
+		if (!empty($this->conf['overrideUserAgent'])) {
+			$paramsString = ' --custom-header-propagation --custom-header \'User-Agent\' \'' . $this->conf['overrideUserAgent'] . '\' ';
+		}
+
 		return $paramsString;
 	}
 
