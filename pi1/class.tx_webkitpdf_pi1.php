@@ -166,7 +166,9 @@ class tx_webkitpdf_pi1 extends tslib_pibase {
 					tx_webkitpdf_utils::debugLogging('Executed shell command', -1, array($scriptCall));
 					tx_webkitpdf_utils::debugLogging('Output of shell command', -1, $output);
 					
-					$this->cacheManager->store($origUrls, $this->filename);
+					if ($loadFromCache) {
+						$this->cacheManager->store($origUrls, $this->filename);
+					}
 					
 				} else {
 					
