@@ -143,7 +143,7 @@ class tx_webkitpdf_pi1 extends tslib_pibase {
 				
 				foreach($urls as &$url) {
 					if($GLOBALS['TSFE']->loginUser) {
-						
+
 						// Do not cache access restricted pages
 						$loadFromCache = FALSE;
 						$url = tx_webkitpdf_utils::appendFESessionInfoToURL($url);
@@ -157,15 +157,14 @@ class tx_webkitpdf_pi1 extends tslib_pibase {
 					$scriptCall = 	$this->scriptPath. 'wkhtmltopdf ' .
 									$this->buildScriptOptions() . ' ' .
 									implode(' ', $urls) . ' ' .
-									$this->filename .
-									' 2>&1';
-					
-					exec($scriptCall, $output);
+									$this->filename;
 
-					// Write debugging information to devLog
-					tx_webkitpdf_utils::debugLogging('Executed shell command', -1, array($scriptCall));
-					tx_webkitpdf_utils::debugLogging('Output of shell command', -1, $output);
-					
+					if (isset($this->conf['runInBackground']) && $this->conf['runInBackground']) {
+						$this->createPdfInBackground($scriptCall);
+					} else {
+						$this->createPdfInForeground($scriptCall);
+					}
+
 					if ($loadFromCache) {
 						$this->cacheManager->store($origUrls, $this->filename);
 					}
@@ -197,6 +196,67 @@ class tx_webkitpdf_pi1 extends tslib_pibase {
 		}
 		
 		return $this->pi_wrapInBaseClass($content);
+	}
+
+	/**
+	 * Runs the given PDF generation command in the background and writes the ouput to a log file.
+	 * If the process does not stop after a configurable wait time the process is killed and an Exeption is thrown.
+	 *
+	 * @param string $scriptCall
+	 * @return void
+	 */
+	protected function createPdfInBackground($scriptCall) {
+		$logFile = isset($this->conf['logFile']) ? t3lib_div::getFileAbsFileName($this->conf['logFile'], TRUE) : '';
+		$logFile = substr($logFile, strlen(PATH_site));
+		$logDir = dirname($logFile);
+		if ($logFile === '') {
+			$logFile = '/dev/null';
+		} else if (!@is_dir(PATH_site . $logDir)) {
+			t3lib_div::mkdir_deep(PATH_site, $logDir);
+		}
+
+		$scriptCall .= ' >> ' . escapeshellarg($logFile) . ' 2>&1 & echo $!';
+		$output = array();
+		exec($scriptCall, $output);
+		$processId = isset($output[0]) ? (int)$output[0] : 0;
+
+		if ($processId === 0) {
+			$this->throwException(new \RuntimeException('Process ID of PDF generator could not be determined.'));
+		}
+
+		tx_webkitpdf_utils::debugLogging('Executed shell command in background with process ID ' . $processId, -1, array($scriptCall));
+
+		$waitTimeInSeconds = isset($this->conf['waitTimeInSeconds']) ? (int)$this->conf['waitTimeInSeconds'] : 0;
+		if ($waitTimeInSeconds === 0) {
+			$waitTimeInSeconds = 10;
+		}
+		$secondsWaited = 0;
+		while ($this->processIsRunning($processId)) {
+			sleep(1);
+			$secondsWaited++;
+			if ($secondsWaited > $waitTimeInSeconds) {
+				exec('kill ' . $processId);
+				$this->throwException(new \RuntimeException('PDF generation did not finish in a reasonable amount of time'));
+			}
+		}
+
+		if (!file_exists($this->filename)) {
+			$this->throwException(new \RuntimeException('PDF generator did not create a PDF file'));
+		}
+	}
+
+	/**
+	 * Executes the given Script call in the foreground and writes the output to the log.
+	 *
+	 * @param string $scriptCall
+	 * @return void
+	 */
+	protected function createPdfInForeground($scriptCall) {
+		$output = array();
+		$scriptCall .= ' 2>&1';
+		exec($scriptCall, $output);
+		tx_webkitpdf_utils::debugLogging('Executed shell command in foreground', -1, array($scriptCall));
+		tx_webkitpdf_utils::debugLogging('Output of shell command', -1, $output);
 	}
 	
 	protected function readScriptSettings() {
@@ -287,6 +347,25 @@ class tx_webkitpdf_pi1 extends tslib_pibase {
 		
 		return $path;
 	}
+
+	/**
+	 * Checks if the process with the given ID is still running.
+	 *
+	 * @param int $processId
+	 * @return bool
+	 */
+	protected function processIsRunning($processId) {
+		try{
+			$result = shell_exec(sprintf("ps %d", $processId));
+			if(count(preg_split("/\n/", $result)) > 2){
+				return true;
+			}
+		} catch(Exception $e){
+			$this->throwException($e);
+		}
+
+		return false;
+	}
 	
 	/**
 	 * Processes the stdWrap properties of the input array
@@ -321,7 +400,17 @@ class tx_webkitpdf_pi1 extends tslib_pibase {
 		}
 		return $tsSettings;
 	}
-	
+
+	/**
+	 * Resets the Content-Type header and throws the given Exception.
+	 *
+	 * @param Exception $exception
+	 * @throws Exception
+	 */
+	protected function throwException($exception) {
+		header('Content-Type: text/html');
+		throw $exception;
+	}
 }
 
 if (defined('TYPO3_MODE') && $TYPO3_CONF_VARS[TYPO3_MODE]['XCLASS']['ext/webkitpdf/pi1/class.tx_webkitpdf_pi1.php']) {
