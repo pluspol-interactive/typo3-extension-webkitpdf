@@ -236,7 +236,7 @@ class tx_webkitpdf_pi1 extends tslib_pibase {
 			$secondsWaited++;
 			if ($secondsWaited > $waitTimeInSeconds) {
 				exec('kill ' . $processId);
-				$this->throwException(new \RuntimeException('PDF generation did not finish in a reasonable amount of time'));
+				$this->throwException(new \RuntimeException('PDF generation did not finish in a reasonable amount of time: ' . $scriptCall));
 			}
 		}
 
