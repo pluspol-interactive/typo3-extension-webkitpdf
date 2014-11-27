@@ -1,0 +1,6 @@
+{
+	"name": "intera-typo3-extension/webkitpdf",
+	"description": "Generate PDF files using WebKit rendering engine.",
+	"type": "typo3-cms-extension",
+	"version": "1.2.0"
+}
