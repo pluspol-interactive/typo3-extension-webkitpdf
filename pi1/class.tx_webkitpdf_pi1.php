@@ -130,69 +130,82 @@ class tx_webkitpdf_pi1 extends tslib_pibase {
 		}
 
 		$content = '';
-		if(!empty($urls)) {
-			if(count($urls) > 0) {
-				
-				$origUrls = implode(' ', $urls);
-				$loadFromCache = TRUE;
-				
-				$allowedHosts = FALSE;
-				if($this->conf['allowedHosts']) {
-					$allowedHosts = t3lib_div::trimExplode(',', $this->conf['allowedHosts']);
-				}
-				
-				foreach($urls as &$url) {
-					if($GLOBALS['TSFE']->loginUser) {
+		try {
 
-						// Do not cache access restricted pages
-						$loadFromCache = FALSE;
-						$url = tx_webkitpdf_utils::appendFESessionInfoToURL($url);
-					}
-					$url = tx_webkitpdf_utils::sanitizeURL($url, $allowedHosts);
-				}
-				
-				// not in cache. generate PDF file
-				if(!$this->cacheManager->isInCache($origUrls) || $this->conf['debugScriptCall'] === '1' || !$loadFromCache) {
-					
-					$scriptCall = 	$this->scriptPath. 'wkhtmltopdf ' .
-									$this->buildScriptOptions() . ' ' .
-									implode(' ', $urls) . ' ' .
-									$this->filename;
-
-					if (isset($this->conf['runInBackground']) && $this->conf['runInBackground']) {
-						$this->createPdfInBackground($scriptCall);
-					} else {
-						$this->createPdfInForeground($scriptCall);
-					}
-
-					if ($loadFromCache) {
-						$this->cacheManager->store($origUrls, $this->filename);
-					}
-					
-				} else {
-					
-					//read filepath from cache
-					$this->filename = $this->cacheManager->get($origUrls);
-				}
-				
-				if($this->conf['fileOnly'] == 1) {
-					return $this->filename;
-				}
-				
-				$filesize = filesize($this->filename);
-				
-				header('Content-type: application/pdf');
-				header('Content-Transfer-Encoding: Binary');
-				header('Content-Length: ' . $filesize);
-				header('Content-Disposition: ' . $this->contentDisposition . '; filename="' . $this->filenameOnly . '"');
-				header('X-Robots-Tag: noindex');
-				readfile($this->filename);
-
-				if(!$this->cacheManager->isCachingEnabled()) {
-					unlink($this->filename);
-				}
-				exit(0);
+			if(!is_array($urls) || empty($urls)) {
+				throw new \InvalidArgumentException('No URL was submitted to the PDF generator.', 1423589347);
 			}
+
+			foreach ($urls as $url) {
+				if ((string)$url === '') {
+					throw new \InvalidArgumentException('An empty URL was submitted to the PDF generator.', 1423589578);
+				}
+			}
+
+			$origUrls = implode(' ', $urls);
+			$loadFromCache = TRUE;
+
+			$allowedHosts = FALSE;
+			if($this->conf['allowedHosts']) {
+				$allowedHosts = t3lib_div::trimExplode(',', $this->conf['allowedHosts']);
+			}
+
+			foreach($urls as &$url) {
+				if($GLOBALS['TSFE']->loginUser) {
+
+					// Do not cache access restricted pages
+					$loadFromCache = FALSE;
+					$url = tx_webkitpdf_utils::appendFESessionInfoToURL($url);
+				}
+				$url = tx_webkitpdf_utils::sanitizeURL($url, $allowedHosts);
+			}
+
+			// not in cache. generate PDF file
+			if(!$this->cacheManager->isInCache($origUrls) || $this->conf['debugScriptCall'] === '1' || !$loadFromCache) {
+
+				$scriptCall = 	$this->scriptPath. 'wkhtmltopdf ' .
+					$this->buildScriptOptions() . ' ' .
+					implode(' ', $urls) . ' ' .
+					$this->filename;
+
+				if (isset($this->conf['runInBackground']) && $this->conf['runInBackground']) {
+					$this->createPdfInBackground($scriptCall);
+				} else {
+					$this->createPdfInForeground($scriptCall);
+				}
+
+				if ($loadFromCache) {
+					$this->cacheManager->store($origUrls, $this->filename);
+				}
+
+			} else {
+
+				//read filepath from cache
+				$this->filename = $this->cacheManager->get($origUrls);
+			}
+
+			if($this->conf['fileOnly'] == 1) {
+				return $this->filename;
+			}
+
+			$filesize = filesize($this->filename);
+
+			header('Content-type: application/pdf');
+			header('Content-Transfer-Encoding: Binary');
+			header('Content-Length: ' . $filesize);
+			header('Content-Disposition: ' . $this->contentDisposition . '; filename="' . $this->filenameOnly . '"');
+			header('X-Robots-Tag: noindex');
+			readfile($this->filename);
+
+			if(!$this->cacheManager->isCachingEnabled()) {
+				unlink($this->filename);
+			}
+			exit(0);
+
+		} catch (\Exception $e) {
+			header(\TYPO3\CMS\Core\Utility\HttpUtility::HTTP_STATUS_400);
+			$this->cObj->data['tx_webkitpdf_error'] = $e->getMessage();
+			$content .= $this->cObj->cObjGetSingle($this->conf['contentObjects']['errorMessage'], $this->conf['contentObjects']['errorMessage.']);
 		}
 		
 		return $this->pi_wrapInBaseClass($content);

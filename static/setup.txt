@@ -1,20 +1,23 @@
-plugin.tx_webkitpdf_pi1.pdfLink = TEXT
-plugin.tx_webkitpdf_pi1.pdfLink {
-	value = {$plugin.tx_webkitpdf_pi1.pdfLink.linkText}
-	typolink {
-		parameter = {$plugin.tx_webkitpdf_pi1.pdfLink.pluginPid}
-		additionalParams {
-			data = getIndpEnv:TYPO3_REQUEST_URL
-			rawUrlEncode = 1
-			wrap = &tx_webkitpdf_pi1[urls][0]=|
+plugin.tx_webkitpdf_pi1 {
+
+	contentObjects {
+		errorMessage = TEXT
+		errorMessage.field = tx_webkitpdf_error
+		errorMessage.wrap = <div class="error">|</div>
+	}
+
+	pdfLink = TEXT
+	pdfLink {
+		value = {$plugin.tx_webkitpdf_pi1.pdfLink.linkText}
+		typolink {
+			parameter = {$plugin.tx_webkitpdf_pi1.pdfLink.pluginPid}
+			additionalParams {
+				data = getIndpEnv:TYPO3_REQUEST_URL
+				rawUrlEncode = 1
+				wrap = &tx_webkitpdf_pi1[urls][0]=|
+			}
 		}
 	}
 }
 
-# Add HTTP response header "Content-Type" when serving PDF files
-[globalVar = TSFE:id = {$plugin.tx_webkitpdf_pi1.pdfLink.pluginPid}]
-config {
-	additionalHeaders = Content-Type: application/pdf
-}
-[global]
 
