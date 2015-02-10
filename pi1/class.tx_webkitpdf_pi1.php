@@ -234,7 +234,7 @@ class tx_webkitpdf_pi1 extends tslib_pibase {
 		$processId = isset($output[0]) ? (int)$output[0] : 0;
 
 		if ($processId === 0) {
-			$this->throwException(new \RuntimeException('Process ID of PDF generator could not be determined.'));
+			throw new \RuntimeException('Process ID of PDF generator could not be determined.');
 		}
 
 		tx_webkitpdf_utils::debugLogging('Executed shell command in background with process ID ' . $processId, -1, array($scriptCall));
@@ -249,12 +249,12 @@ class tx_webkitpdf_pi1 extends tslib_pibase {
 			$secondsWaited++;
 			if ($secondsWaited > $waitTimeInSeconds) {
 				exec('kill ' . $processId);
-				$this->throwException(new \RuntimeException('PDF generation did not finish in a reasonable amount of time: ' . $scriptCall));
+				throw new \RuntimeException('PDF generation did not finish in a reasonable amount of time' . ($this->conf['debug'] ? ': ' . $scriptCall : '.'));
 			}
 		}
 
 		if (!file_exists($this->filename)) {
-			$this->throwException(new \RuntimeException('PDF generator did not create a PDF file'));
+			throw new \RuntimeException('PDF generator did not create a PDF file');
 		}
 	}
 
@@ -368,16 +368,12 @@ class tx_webkitpdf_pi1 extends tslib_pibase {
 	 * @return bool
 	 */
 	protected function processIsRunning($processId) {
-		try{
-			$result = shell_exec(sprintf("ps %d", $processId));
-			if(count(preg_split("/\n/", $result)) > 2){
-				return true;
-			}
-		} catch(Exception $e){
-			$this->throwException($e);
+		$result = shell_exec(sprintf("ps %d", $processId));
+		if(count(preg_split("/\n/", $result)) > 2){
+			return true;
+		} else {
+			return false;
 		}
-
-		return false;
 	}
 	
 	/**
@@ -412,17 +408,6 @@ class tx_webkitpdf_pi1 extends tslib_pibase {
 			}
 		}
 		return $tsSettings;
-	}
-
-	/**
-	 * Resets the Content-Type header and throws the given Exception.
-	 *
-	 * @param Exception $exception
-	 * @throws Exception
-	 */
-	protected function throwException($exception) {
-		header('Content-Type: text/html');
-		throw $exception;
 	}
 }
 

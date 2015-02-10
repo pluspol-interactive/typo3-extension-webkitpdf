@@ -1,5 +1,7 @@
 plugin.tx_webkitpdf_pi1 {
 
+	debug = 0
+
 	contentObjects {
 		errorMessage = TEXT
 		errorMessage.field = tx_webkitpdf_error
