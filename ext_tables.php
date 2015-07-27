@@ -1,14 +1,15 @@
 <?php
-if(!defined('TYPO3_MODE')) {
-	die ('Access denied.');
+
+if (!defined('TYPO3_MODE')) {
+	die('Access denied.');
 }
 
+use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
+
 // Add static file for plugin
-t3lib_extMgm::addStaticFile($_EXTKEY, 'static/', 'WebKit PDF');
+ExtensionManagementUtility::addStaticFile($_EXTKEY, 'Configuration/TypoScript/', 'WebKit PDF');
 
-t3lib_div::loadTCA('tt_content');
-$TCA['tt_content']['types']['list']['subtypes_excludelist'][$_EXTKEY . '_pi1'] = 'layout,pages,select_key';
+$GLOBALS['TCA']['tt_content']['types']['list']['subtypes_excludelist'][$_EXTKEY . '_pi1'] = 'layout,pages,select_key';
 
-t3lib_extMgm::addPlugin(array('LLL:EXT:webkitpdf/locallang_db.xml:tt_content.list_type_pi1', $_EXTKEY . '_pi1'), 'list_type');
+ExtensionManagementUtility::addPlugin(array('LLL:EXT:webkitpdf/Resource/Private/Language/locallang_db.xml:tt_content.list_type_pi1', $_EXTKEY . '_pi1'), 'list_type');
 
-?>
