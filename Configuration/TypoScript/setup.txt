@@ -15,15 +15,25 @@ plugin.tx_webkitpdf_pi1 {
 		value = {$plugin.tx_webkitpdf_pi1.pdfLink.linkText}
 		typolink {
 			parameter = {$plugin.tx_webkitpdf_pi1.pdfLink.pluginPid}
-			additionalParams {
-				data = getIndpEnv:TYPO3_REQUEST_URL
-				rawUrlEncode = 1
-				wrap = &tx_webkitpdf_pi1[urls][0]=|
+			additionalParams.cObject = COA
+			additionalParams.cObject {
+				10 = TEXT
+				10 {
+					data = getIndpEnv:TYPO3_REQUEST_URL
+					rawUrlEncode = 1
+					wrap = &tx_webkitpdf_pi1[urls][0]=|
+				}
+				20 = TEXT
+				20 {
+					data = TSFE:id
+					wrap = &tx_webkitpdf_pi1[pageUids][0]=
+				}
 			}
 		}
 	}
 
 	options {
+
 		debug = 0
 		pageURLInHeader = 0
 		copyrightNotice = 0
@@ -38,6 +48,17 @@ plugin.tx_webkitpdf_pi1 {
 		customScriptPath =
 		storageUid = 0
 		staticFileName =
+
+		staticFileNameInPageContext.cObject = COA
+		staticFileNameInPageContext.cObject {
+			10 = TEXT
+			10.field = uid
+			10.stdWrap.outerWrap = |-
+			10.stdWrap.required = 1
+			20 = TEXT
+			20.field = title
+		}
+
 	}
 
 	pdfGenerators {

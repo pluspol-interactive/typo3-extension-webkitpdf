@@ -25,6 +25,7 @@ namespace Tx\Webkitpdf\Utility;
  ***************************************************************/
 
 use TYPO3\CMS\Core\SingletonInterface;
+use TYPO3\CMS\Core\Utility\File\BasicFileUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -91,5 +92,26 @@ class PdfUtility implements SingletonInterface {
 		if ($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['webkitpdf']['debug'] === 1) {
 			GeneralUtility::devlog($title, 'webkitpdf', $severity, $dataVar);
 		}
+	}
+
+	/**
+	 * Generates a nice looking filename without special chars.
+	 *
+	 * @param string $fileName
+	 * @return string
+	 */
+	public function sanitizeFilename($fileName) {
+
+		// Workaround to remove special chars from the filenames.
+		$utf8FileSystemBackup = $GLOBALS['TYPO3_CONF_VARS']['SYS']['UTF8filesystem'];
+		$GLOBALS['TYPO3_CONF_VARS']['SYS']['UTF8filesystem'] = FALSE;
+
+		// TODO: use non deprecated function, see also: https://forge.typo3.org/issues/54357
+		$fileUtility = GeneralUtility::makeInstance(BasicFileUtility::class);
+		$fileName = $fileUtility->cleanFileName($fileName);
+
+		$GLOBALS['TYPO3_CONF_VARS']['SYS']['UTF8filesystem'] = $utf8FileSystemBackup;
+
+		return $fileName;
 	}
 }

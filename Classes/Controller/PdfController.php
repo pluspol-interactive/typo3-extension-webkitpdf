@@ -30,6 +30,7 @@ use Tx\Webkitpdf\Utility\PdfUtility;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\HttpUtility;
+use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
 use TYPO3\CMS\Frontend\Plugin\AbstractPlugin;
 
 /**
@@ -156,6 +157,11 @@ class PdfController extends AbstractPLugin {
 	 */
 	protected function init($conf) {
 
+		$this->cacheManager = GeneralUtility::makeInstance(CacheManager::class);
+		$this->pdfUtility = GeneralUtility::makeInstance(PdfUtility::class);
+
+		$this->buildStaticFileNameInPageContext($conf);
+
 		foreach (array('options', 'scriptParams') as $typoScriptPath) {
 
 			$conf[$typoScriptPath] = array();
@@ -206,19 +212,57 @@ class PdfController extends AbstractPLugin {
 
 		$this->filenameStorage = $this->filenameDownload = $this->options['filePrefix'] . GeneralUtility::hmac(GeneralUtility::generateRandomBytes(512), 'TxWebkitpdfPdfFilename') . '.pdf';
 		if (!empty($this->options['staticFileName'])) {
-			$this->filenameDownload = $this->options['staticFileName'];
+			$this->filenameDownload = $this->pdfUtility->sanitizeFilename($this->options['staticFileName']);
 		}
 
 		if (substr($this->filenameDownload, strlen($this->filenameDownload) - 4) !== '.pdf') {
 			$this->filenameDownload .= '.pdf';
 		}
 
-		$this->cacheManager = GeneralUtility::makeInstance(CacheManager::class);
-		$this->pdfUtility = GeneralUtility::makeInstance(PdfUtility::class);
-
 		if (!empty($this->options['openFilesInline'])) {
 			$this->useInlineContentDisposition = TRUE;
 		}
+	}
+
+	/**
+	 * Uses the TypoScript settings from
+	 *
+	 * @param array $conf
+	 */
+	protected function buildStaticFileNameInPageContext(&$conf) {
+
+		if (!is_array($this->piVars['pageUids']) || count($this->piVars['pageUids']) !== 1) {
+			return;
+		}
+
+		if (empty($conf['options.']['staticFileNameInPageContext.'])) {
+			return;
+		}
+
+		$pageUid = (int)$this->piVars['pageUids'][0];
+		$contentObject = GeneralUtility::makeInstance(ContentObjectRenderer::class);
+
+		$pageData = $this->getTypoScriptFrontendController()->sys_page->getPage($pageUid);
+
+		$contentObject->start((array)$pageData, 'pages');
+		$staticFileName = $contentObject->stdWrap('', $conf['options.']['staticFileNameInPageContext.']);
+
+		if (!empty($staticFileName)) {
+
+			// Overwrite the default statice filename setting and prevent stdWrap processing.
+			$conf['options.']['staticFileName'] = $staticFileName;
+			unset($conf['options.']['staticFileName.']);
+
+			// Prevent duplicate stdWrap processing.
+			unset($conf['options.']['staticFileNameInPageContext.']);
+		}
+	}
+
+	/**
+	 * @return \TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController
+	 */
+	protected function getTypoScriptFrontendController() {
+		return $GLOBALS['TSFE'];
 	}
 
 	/**
