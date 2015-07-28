@@ -24,42 +24,31 @@ namespace Tx\Webkitpdf\Utility;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
+use TYPO3\CMS\Core\SingletonInterface;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
  * Utility function for the PDF generation.
  */
-class PdfUtility {
+class PdfUtility implements SingletonInterface {
 
 	/**
-	 * Escapes a URI resource name so it can safely be used on the command line.
-	 *
-	 * @param   string $inputName URI resource name to safeguard, must not be empty
-	 * @return  string  $inputName escaped as needed
-	 */
-	static public function wrapUriName($inputName) {
-		return escapeshellarg($inputName);
-	}
-
-	/**
-	 * Checks if the given URL's host matches the current host
-	 * and sanitizes the URL to be used on command line.
+	 * Make sure that host of the URL matches TYPO3 host or one of allowed hosts given.
 	 *
 	 * @param string $url The URL to be sanitized
 	 * @param array $allowedHosts
 	 * @throws \Exception
 	 * @return string The sanitized URL
 	 */
-	static public function sanitizeURL($url, $allowedHosts) {
+	public function sanitizeURL($url, $allowedHosts) {
 
-		//Make sure that host of the URL matches TYPO3 host or one of allowed hosts set in TypoScript.
 		$parts = parse_url($url);
 		if ($parts['host'] !== GeneralUtility::getIndpEnv('TYPO3_HOST_ONLY')) {
 			if (($allowedHosts && !in_array($parts['host'], $allowedHosts)) || !$allowedHosts) {
 				throw new \Exception('Host "' . $parts['host'] . '" does not match TYPO3 host.');
 			}
 		}
-		$url = self::wrapUriName($url);
+
 		return $url;
 	}
 
@@ -70,23 +59,20 @@ class PdfUtility {
 	 * @param   string $url The URL to append the parameters to
 	 * @return  string  The processed URL
 	 */
-	static public function appendFESessionInfoToURL($url) {
-		if (strpos($url, '?') !== FALSE) {
-			$url .= '&';
-		} else {
-			$url .= '?';
-		}
-
-		$url .= 'FE_SESSION_KEY=' .
+	public function appendFESessionInfoToURL($url) {
+		/** @var \TYPO3\CMS\Frontend\Controller\TypoScriptFrontendController $frontendController */
+		$frontendController = $GLOBALS['TSFE'];
+		$uParts = parse_url($url);
+		$params = '&FE_SESSION_KEY=' .
 			rawurlencode(
-				$GLOBALS['TSFE']->fe_user->id .
-				'-' .
+				$frontendController->fe_user->id . '-' .
 				md5(
-					$GLOBALS['TSFE']->fe_user->id .
-					'/' .
-					$GLOBALS['TYPO3_CONF_VARS']['SYS']['encryptionKey']
+					$frontendController->fe_user->id . '/' .
+					$frontendController->TYPO3_CONF_VARS['SYS']['encryptionKey']
 				)
 			);
+		// Add the session parameter ...
+		$url .= ($uParts['query'] ? '' : '?') . $params;
 		return $url;
 	}
 
@@ -97,48 +83,13 @@ class PdfUtility {
 	 * Additionally checks if debug was activated
 	 *
 	 * @param    string $title : title of the event
-	 * @param    string $severity : severity of the debug event
+	 * @param    int $severity : severity of the debug event
 	 * @param    array $dataVar : additional data
 	 * @return    void
 	 */
-	static public function debugLogging($title, $severity = -1, $dataVar = array()) {
+	public function debugLogging($title, $severity = -1, $dataVar = array()) {
 		if ($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['webkitpdf']['debug'] === 1) {
 			GeneralUtility::devlog($title, 'webkitpdf', $severity, $dataVar);
 		}
-	}
-
-	/**
-	 * Makes sure that given path has a slash as first and last character
-	 *
-	 * @param    string $path : The path to be sanitized
-	 * @return    string        Sanitized path
-	 */
-	static public function sanitizePath($path, $trailingSlash = TRUE) {
-
-		// slash as last character
-		if ($trailingSlash && substr($path, (strlen($path) - 1)) !== '/') {
-			$path .= '/';
-		}
-
-		//slash as first character
-		if (substr($path, 0, 1) !== '/') {
-			$path = '/' . $path;
-		}
-
-		return $path;
-	}
-
-	/**
-	 * Generates a random hash
-	 *
-	 * @return    string The generated hash
-	 */
-	static public function generateHash() {
-		$result = '';
-		$charPool = '0123456789abcdefghijklmnopqrstuvwxyz';
-		for ($p = 0; $p < 15; $p++) {
-			$result .= $charPool[mt_rand(0, strlen($charPool) - 1)];
-		}
-		return sha1(md5(sha1($result)));
 	}
 }

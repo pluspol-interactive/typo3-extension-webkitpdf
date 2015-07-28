@@ -31,94 +31,82 @@ use TYPO3\CMS\Core\Utility\GeneralUtility;
  */
 class CacheManager {
 
-	protected $conf;
+	/**
+	 * The identifier of the cache that is used to store the generated PDFs.
+	 *
+	 * @const
+	 */
+	const CACHE_IDENTIFIER = 'tx_webkitpdf_pdf';
 
-	protected $isEnabled;
+	/**
+	 * @var \TYPO3\CMS\Core\Cache\Frontend\FrontendInterface
+	 */
+	protected $cache;
 
-	public function __construct($conf = array()) {
-		$this->conf = $conf;
-		$this->isEnabled = TRUE;
-		$minutes = $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['webkitpdf']['cacheThreshold'];
-		if (intval($minutes) === 0) {
-			$this->isEnabled = FALSE;
-		}
-		if (intval($this->conf['disableCache']) === 1) {
-			$this->isEnabled = FALSE;
-		}
-	}
-
-	public function clearCachePostProc(&$params, &$pObj) {
-		$now = time();
-
-		//cached files older than x minutes.
-		$minutes = $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['webkitpdf']['cacheThreshold'];
-		$threshold = $now - $minutes * 60;
-
-		$res = $this->getDatabaseConnection()->exec_SELECTquery('uid,crdate,filename', 'tx_webkitpdf_cache', 'crdate<' . $threshold);
-		if ($res && $this->getDatabaseConnection()->sql_num_rows($res) > 0) {
-			$filenames = array();
-			while (($row = $this->getDatabaseConnection()->sql_fetch_assoc($res)) !== FALSE) {
-				$filenames[] = $row['filename'];
-			}
-			$this->getDatabaseConnection()->sql_free_result($res);
-			$this->getDatabaseConnection()->exec_DELETEquery('tx_webkitpdf_cache', 'crdate<' . $threshold);
-			foreach ($filenames as $file) {
-				if (file_exists($file)) {
-					unlink($file);
-				}
-			}
-
-			// Write a message to devlog
-			if ($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['webkitpdf']['debug'] === 1) {
-				GeneralUtility::devLog('Clearing cached files older than ' . $minutes . ' minutes.', 'webkitpdf', -1);
-			}
-		}
-	}
-
-	public function isInCache($urls) {
-		$found = FALSE;
-		if ($this->isEnabled) {
-			$res = $this->getDatabaseConnection()->exec_SELECTquery('uid', 'tx_webkitpdf_cache', "urls='" . md5($urls) . "'");
-			if ($res && $this->getDatabaseConnection()->sql_num_rows($res) === 1) {
-				$found = TRUE;
-				$this->getDatabaseConnection()->sql_free_result($res);
-			}
-		}
-		return $found;
-	}
-
-	public function store($urls, $filename) {
-		if ($this->isEnabled) {
-			$insertFields = array(
-				'crdate' => time(),
-				'filename' => $filename,
-				'urls' => md5($urls)
-			);
-			$this->getDatabaseConnection()->exec_INSERTquery('tx_webkitpdf_cache', $insertFields);
-		}
-	}
-
-	public function get($urls) {
-		$filename = FALSE;
-		if ($this->isEnabled) {
-			$res = $this->getDatabaseConnection()->exec_SELECTquery('filename', 'tx_webkitpdf_cache', "urls='" . md5($urls) . "'");
-			if ($res && $this->getDatabaseConnection()->sql_num_rows($res) === 1) {
-				$row = $this->getDatabaseConnection()->sql_fetch_assoc($res);
-				$filename = $row['filename'];
-				$this->getDatabaseConnection()->sql_free_result($res);
-			}
-		}
-		return $filename;
-	}
-
-	public function isCachingEnabled() {
-		return $this->isEnabled;
+	/**
+	 * Initializes the cache frontend.
+	 */
+	public function __construct() {
+		$this->cache = GeneralUtility::makeInstance(\TYPO3\CMS\Core\Cache\CacheManager::class)->getCache(static::CACHE_IDENTIFIER);
 	}
 
 	/**
-	 * @return \TYPO3\CMS\Core\Database\DatabaseConnection
+	 * Returns TRUE when there is a cache entry available for the given URLs.
+	 *
+	 * @param array $urls Comma seperated list of URLs that were used to generate the PDF.
+	 * @return bool
 	 */
-	protected function getDatabaseConnection() {
-		returN $GLOBALS['TYPO3_DB'];
+	public function isInCache(array $urls) {
+		return $this->cache->has($this->getEntryIdentifier($urls));
+	}
+
+	/**
+	 * Stores the contents of the given file in the cache.
+	 *
+	 * When page IDs are provided the cache entry will be tagged with these page IDs to make
+	 * sure the PDF cache is flushed when the page changes.
+	 *
+	 * @param array $urls Array of the URLs that should be retrieved by the PDF generator.
+	 * @param string $fileIdentifier The file identifier of the generated PDF file.
+	 * @param array $pageIds Array containing the page UIDs for which the PDF was generated.
+	 */
+	public function store(array $urls, $fileIdentifier, $pageIds = array()) {
+
+		// Convert the page UIDs to cache tags.
+		array_walk($pageIds, function (&$tag) {
+			$tag = 'pageId_' . intval($tag);
+		});
+
+		$this->cache->set($this->getEntryIdentifier($urls), $fileIdentifier, $pageIds);
+	}
+
+	/**
+	 * Fetches the file identifier of the PDF document.
+	 *
+	 * @param array $urls Array of the URLs that should be retrieved by the PDF generator.
+	 * @return string The file identifier.
+	 */
+	public function get(array $urls) {
+		return $this->cache->get($this->getEntryIdentifier($urls));
+	}
+
+	/**
+	 * Removes the entry for the given URLs from the cache.
+	 *
+	 * @param array $urls Array of the URLs that should be retrieved by the PDF generator.
+	 * @return string The PDF file contents.
+	 */
+	public function remove(array $urls) {
+		$this->cache->remove($this->getEntryIdentifier($urls));
+	}
+
+	/**
+	 * Builds the cache entry identifiert for the given URLs.
+	 *
+	 * @param array $urls Array of the URLs that should be retrieved by the PDF generator.
+	 * @return string The cache identifier that should be used for the given URL array.
+	 */
+	protected function getEntryIdentifier(array $urls) {
+		return sha1(implode(', ', $urls));
 	}
 }

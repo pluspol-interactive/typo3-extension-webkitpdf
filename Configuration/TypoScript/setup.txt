@@ -4,8 +4,6 @@ plugin.tx_webkitpdf_pi1 {
 
 	userFunc = Tx\Webkitpdf\Controller\PdfController->main
 
-	debug = 0
-
 	contentObjects {
 		errorMessage = TEXT
 		errorMessage.field = tx_webkitpdf_error
@@ -23,6 +21,35 @@ plugin.tx_webkitpdf_pi1 {
 				wrap = &tx_webkitpdf_pi1[urls][0]=|
 			}
 		}
+	}
+
+	options {
+		debug = 0
+		pageURLInHeader = 0
+		copyrightNotice = 0
+		additionalStylesheet =
+		overrideUserAgent =
+		fileOnly = 0
+		allowedHosts =
+		urls =
+		filePrefix =
+		customParameterName =
+		customPdfGenerator =
+		customScriptPath =
+		storageUid = 0
+		staticFileName =
+	}
+
+	pdfGenerators {
+		background {
+			logFile =
+			waitTimeInSeconds = 10
+		}
+	}
+
+
+	scriptParams {
+
 	}
 }
 

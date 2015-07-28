@@ -1,4 +1,4 @@
-	# cat=basic; type=integer; label=Cache threshold:When clearing cache in backend, cached files older than this value (in minutes) will be deleted.
-cacheThreshold = 10
+	# cat=basic; type=integer; label=Cache lifetime: The lifetime of the generated PDF documents in seconds (defaults to 30 days).
+cacheLifetime = 2592000
 	# cat=basic; type=boolean; label=Debug: If enabled, debug messages are written to TYPO3 devLog. You also need to have a devlog extension installed to see the messages.
 debug = 0

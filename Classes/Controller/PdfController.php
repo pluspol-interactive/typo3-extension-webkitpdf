@@ -24,9 +24,10 @@ namespace Tx\Webkitpdf\Controller;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
+use Tx\Webkitpdf\Generator\PdfGeneratorFactory;
 use Tx\Webkitpdf\Utility\CacheManager;
 use Tx\Webkitpdf\Utility\PdfUtility;
-use TYPO3\CMS\Core\Utility\ExtensionManagementUtility;
+use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\HttpUtility;
 use TYPO3\CMS\Frontend\Plugin\AbstractPlugin;
@@ -38,13 +39,32 @@ use TYPO3\CMS\Frontend\Plugin\AbstractPlugin;
  */
 class PdfController extends AbstractPLugin {
 
-	var $prefixId = 'tx_webkitpdf_pi1';
+	/**
+	 * Should be same as classname of the plugin, used for CSS classes, variables
+	 *
+	 * @var string
+	 */
+	public $prefixId = 'tx_webkitpdf_pi1';
 
-	var $extKey = 'webkitpdf';
+	/**
+	 * The Extension key.
+	 *
+	 * @var string
+	 */
+	public $extKey = 'webkitpdf';
 
-	// Disable caching: Don't check cHash, because the plugin is a USER_INT object
+	/**
+	 * If set, then caching is disabled if piVars are incoming while no cHash was set (Set this for all USER plugins!)
+	 *
+	 * @var bool
+	 */
 	public $pi_checkCHash = FALSE;
 
+	/**
+	 * If set, then links are 1) not using cHash and 2) not allowing pages to be cached. (Set this for all USER_INT plugins!)
+	 *
+	 * @var bool
+	 */
 	public $pi_USER_INT_obj = 1;
 
 	/**
@@ -52,17 +72,81 @@ class PdfController extends AbstractPLugin {
 	 */
 	protected $cacheManager;
 
-	protected $scriptPath;
+	/**
+	 * The full patch to the wkhtmltopdf script.
+	 * Can be overwritten with the "customScriptPath" setting.
+	 *
+	 * @var string
+	 */
+	protected $scriptPath = '/usr/bin/wkhtmltopdf';
 
-	protected $outputPath;
+	/**
+	 * The output path to which the PDF are written.
+	 * By default /typo3temp/tx_webkitpdf/ is used.
+	 * Can be overwritten with the "customTempOutputPath" option.
+	 *
+	 * @var \TYPO3\CMS\Core\Resource\Folder
+	 */
+	protected $outputDirectory;
 
-	protected $paramName;
+	/**
+	 * The name of the GET parameter in which the URLs that should be converted
+	 * to PDFs are passed to the plugin. "urls" is used by default but can be
+	 * overwritten with the "customParameterName" option.^
+	 *
+	 * @var string
+	 */
+	protected $paramName = 'urls';
 
-	protected $filename;
+	/**
+	 * Absolute path to the temporary file in which the PDF is stored.
+	 *
+	 * @var string
+	 */
+	protected $tempFile;
 
-	protected $filenameOnly;
+	/**
+	 * The value that is used for th Content-Disposition header. By default attachment is used.
+	 * With the config option "openFilesInline" the value will be changed to "inline".
+	 *
+	 * @var string
+	 */
+	protected $useInlineContentDisposition = FALSE;
 
-	protected $contentDisposition;
+	/**
+	 * The filename that is used when the PDF is written to the storage.
+	 * The prefix of this filename can be influenced with the "filePrefix" setting.
+	 *
+	 * @var string
+	 */
+	protected $filenameStorage;
+
+	/**
+	 * The filename that is used when the file is delivered. By default the storage filename is used.
+	 * Can be overwritten with the "staticFileName" setting.
+	 *
+	 * @var string
+	 */
+	protected $filenameDownload;
+
+	/**
+	 * @var PdfUtility
+	 */
+	protected $pdfUtility;
+
+	/**
+	 * The identifier of the PDF generator that should be used.
+	 *
+	 * @var string
+	 */
+	protected $pdfGenerator = 'foreground';
+
+	/**
+	 * All values from the "options" namespace in the TypoScript configuration.
+	 *
+	 * @var array
+	 */
+	protected $options;
 
 	/**
 	 * Init parameters. Reads TypoScript settings.
@@ -72,55 +156,68 @@ class PdfController extends AbstractPLugin {
 	 */
 	protected function init($conf) {
 
-		// Process stdWrap properties
-		$temp = $conf['scriptParams.'];
-		unset($conf['scriptParams.']);
-		$this->conf = $this->processStdWraps($conf);
-		if (is_array($temp)) {
-			$this->conf['scriptParams'] = $this->processStdWraps($temp);
+		foreach (array('options', 'scriptParams') as $typoScriptPath) {
+
+			$conf[$typoScriptPath] = array();
+			if (is_array($conf[$typoScriptPath . '.']) && !empty($conf[$typoScriptPath . '.'])) {
+				$conf[$typoScriptPath] = $this->processStdWraps($conf[$typoScriptPath . '.']);
+			}
+
+			unset($conf[$typoScriptPath . '.']);
 		}
+
+		if (is_array($conf['pdfGenerators.'])) {
+			foreach ($conf['pdfGenerators.'] as $pdfGenerator => $pdfGeneratorConf) {
+				$pdfGenerator = rtrim($pdfGenerator, '.');
+				$conf['pdfGenerators'][$pdfGenerator] = array();
+				if (is_array($pdfGeneratorConf) && !empty($pdfGeneratorConf)) {
+					$conf['pdfGenerators'][$pdfGenerator] = $this->processStdWraps($pdfGeneratorConf);
+				}
+			}
+		}
+		unset($conf['pdfGenerators.']);
+
+		$this->conf = $conf;
+		$this->options = $conf['options'];
 
 		$this->pi_setPiVarDefaults();
 
-		$this->scriptPath = ExtensionManagementUtility::extPath('webkitpdf') . 'res/';
-		if ($this->conf['customScriptPath']) {
-			$this->scriptPath = $this->conf['customScriptPath'];
+		$storageUid = empty($this->options['storageUid']) ? 0 : (int)$this->options['storageUid'];
+		$outputStorage = ResourceFactory::getInstance()->getStorageObject($storageUid);
+
+		if (!empty($this->options['customScriptPath'])) {
+			$this->scriptPath = $this->options['customScriptPath'];
 		}
 
-		if ($this->conf['customTempOutputPath']) {
-			$this->outputPath = PdfUtility::sanitizePath($this->conf['customTempOutputPath']);
-		} else {
-			$this->outputPath = '/typo3temp/tx_webkitpdf/';
+		if (!empty($this->options['customPdfGenerator'])) {
+			$this->pdfGenerator = $this->options['customPdfGenerator'];
 		}
 
-		$documentRoot = GeneralUtility::getIndpEnv('TYPO3_DOCUMENT_ROOT');
-		$absoluteOutputPath = $documentRoot . $this->outputPath;
-		if (!@is_dir($absoluteOutputPath)) {
-			GeneralUtility::mkdir_deep($documentRoot, $this->outputPath);
+		$outputPath = empty($this->options['customTempOutputPath']) ? '/typo3temp/tx_webkitpdf/' : $this->options['customTempOutputPath'];
+		if (!$outputStorage->hasFolder($outputPath)) {
+			$outputStorage->createFolder($outputPath);
 		}
-		$this->outputPath = $absoluteOutputPath;
+		$this->outputDirectory = $outputStorage->getFolder($outputPath);
 
-		$this->paramName = 'urls';
-		if ($this->conf['customParameterName']) {
-			$this->paramName = $this->conf['customParameterName'];
-		}
 
-		$this->filename = $this->outputPath . $this->conf['filePrefix'] . PdfUtility::generateHash() . '.pdf';
-		$this->filenameOnly = basename($this->filename);
-		if ($this->conf['staticFileName']) {
-			$this->filenameOnly = $this->conf['staticFileName'];
+		if (!empty($this->options['customParameterName'])) {
+			$this->paramName = $this->options['customParameterName'];
 		}
 
-		if (substr($this->filenameOnly, strlen($this->filenameOnly) - 4) !== '.pdf') {
-			$this->filenameOnly .= '.pdf';
+		$this->filenameStorage = $this->filenameDownload = $this->options['filePrefix'] . GeneralUtility::hmac(GeneralUtility::generateRandomBytes(512), 'TxWebkitpdfPdfFilename') . '.pdf';
+		if (!empty($this->options['staticFileName'])) {
+			$this->filenameDownload = $this->options['staticFileName'];
 		}
 
-		$this->readScriptSettings();
-		$this->cacheManager = GeneralUtility::makeInstance(CacheManager::class, $this->conf);
+		if (substr($this->filenameDownload, strlen($this->filenameDownload) - 4) !== '.pdf') {
+			$this->filenameDownload .= '.pdf';
+		}
 
-		$this->contentDisposition = 'attachment';
-		if (intval($this->conf['openFilesInline']) === 1) {
-			$this->contentDisposition = 'inline';
+		$this->cacheManager = GeneralUtility::makeInstance(CacheManager::class);
+		$this->pdfUtility = GeneralUtility::makeInstance(PdfUtility::class);
+
+		if (!empty($this->options['openFilesInline'])) {
+			$this->useInlineContentDisposition = TRUE;
 		}
 	}
 
@@ -132,18 +229,18 @@ class PdfController extends AbstractPLugin {
 	 * @return    string        The content that is displayed on the website
 	 */
 	public function main($content, $conf) {
+
 		$this->init($conf);
 
 		$urls = $this->piVars[$this->paramName];
 		if (!$urls) {
-			if (isset($this->conf['urls.'])) {
-				$urls = $this->conf['urls.'];
+			if (isset($this->options['urls.'])) {
+				$urls = $this->options['urls.'];
 			} else {
-				$urls = array($this->conf['urls']);
+				$urls = array($this->options['urls']);
 			}
 		}
 
-		$content = '';
 		try {
 
 			if (!is_array($urls) || empty($urls)) {
@@ -151,242 +248,189 @@ class PdfController extends AbstractPLugin {
 			}
 
 			foreach ($urls as $url) {
-				if ((string)$url === '') {
+				if (trim($url) === '') {
 					throw new \InvalidArgumentException('An empty URL was submitted to the PDF generator.', 1423589578);
 				}
 			}
 
-			$origUrls = implode(' ', $urls);
-			$loadFromCache = TRUE;
-
 			$allowedHosts = FALSE;
-			if ($this->conf['allowedHosts']) {
-				$allowedHosts = GeneralUtility::trimExplode(',', $this->conf['allowedHosts']);
+			if (!empty($this->options['allowedHosts'])) {
+				$allowedHosts = GeneralUtility::trimExplode(',', $this->options['allowedHosts']);
 			}
 
 			foreach ($urls as &$url) {
+
+				// Do not use cache if a Frontend use is logged in and append the session ID to the URLs.
 				if ($GLOBALS['TSFE']->loginUser) {
-
-					// Do not cache access restricted pages
-					$loadFromCache = FALSE;
-					$url = PdfUtility::appendFESessionInfoToURL($url);
-				}
-				$url = PdfUtility::sanitizeURL($url, $allowedHosts);
-			}
-
-			// not in cache. generate PDF file
-			if (!$this->cacheManager->isInCache($origUrls) || $this->conf['debugScriptCall'] === '1' || !$loadFromCache) {
-
-				$scriptCall = $this->scriptPath . 'wkhtmltopdf ' .
-					$this->buildScriptOptions() . ' ' .
-					implode(' ', $urls) . ' ' .
-					$this->filename;
-
-				if (isset($this->conf['runInBackground']) && $this->conf['runInBackground']) {
-					$this->createPdfInBackground($scriptCall);
-				} else {
-					$this->createPdfInForeground($scriptCall);
+					$url = $this->pdfUtility->appendFESessionInfoToURL($url);
 				}
 
-				if ($loadFromCache) {
-					$this->cacheManager->store($origUrls, $this->filename);
-				}
-
-			} else {
-
-				//read filepath from cache
-				$this->filename = $this->cacheManager->get($origUrls);
+				$url = $this->pdfUtility->sanitizeURL($url, $allowedHosts);
 			}
 
-			if ($this->conf['fileOnly'] == 1) {
-				return $this->filename;
+			$pdfFile = $this->generatePdfOrReadFromCache($urls);
+
+			if ($this->options['fileOnly'] == 1) {
+				return $pdfFile->getPublicUrl();
 			}
 
-			$filesize = filesize($this->filename);
+			$this->dumpPdfFile($pdfFile);
 
-			header('Content-type: application/pdf');
-			header('Content-Transfer-Encoding: Binary');
-			header('Content-Length: ' . $filesize);
-			header('Content-Disposition: ' . $this->contentDisposition . '; filename="' . $this->filenameOnly . '"');
-			header('X-Robots-Tag: noindex');
-			readfile($this->filename);
-
-			if (!$this->cacheManager->isCachingEnabled()) {
-				unlink($this->filename);
+			if (!$this->isCachingEnabled()) {
+				$pdfFile->delete();
 			}
+
 			exit(0);
 
 		} catch (\Exception $e) {
 			header(HttpUtility::HTTP_STATUS_400);
 			$this->cObj->data['tx_webkitpdf_error'] = $e->getMessage();
-			$content .= $this->cObj->cObjGetSingle($this->conf['contentObjects']['errorMessage'], $this->conf['contentObjects']['errorMessage.']);
+			$content .= $this->cObj->cObjGetSingle($this->conf['contentObjects.']['errorMessage'], $this->conf['contentObjects.']['errorMessage.']);
+		}
+
+		if (!empty($this->tempFile)) {
+			GeneralUtility::unlink_tempfile($this->tempFile);
 		}
 
 		return $this->pi_wrapInBaseClass($content);
 	}
 
 	/**
-	 * Runs the given PDF generation command in the background and writes the ouput to a log file.
-	 * If the process does not stop after a configurable wait time the process is killed and an Exeption is thrown.
-	 *
-	 * @param string $scriptCall
-	 * @return void
+	 * @param array $urls
+	 * @return \TYPO3\CMS\Core\Resource\File
 	 */
-	protected function createPdfInBackground($scriptCall) {
-		$logFile = isset($this->conf['logFile']) ? GeneralUtility::getFileAbsFileName($this->conf['logFile'], TRUE) : '';
-		$logFile = substr($logFile, strlen(PATH_site));
-		$logDir = dirname($logFile);
-		if ($logFile === '') {
-			$logFile = '/dev/null';
-		} else if (!@is_dir(PATH_site . $logDir)) {
-			GeneralUtility::mkdir_deep(PATH_site, $logDir);
-		}
+	protected function generatePdfOrReadFromCache(array $urls) {
 
-		$scriptCall .= ' >> ' . escapeshellarg($logFile) . ' 2>&1 & echo $!';
-		$output = array();
-		exec($scriptCall, $output);
-		$processId = isset($output[0]) ? (int)$output[0] : 0;
+		$cachingEnabled = $this->isCachingEnabled();
 
-		if ($processId === 0) {
-			throw new \RuntimeException('Process ID of PDF generator could not be determined.');
-		}
-
-		PdfUtility::debugLogging('Executed shell command in background with process ID ' . $processId, -1, array($scriptCall));
-
-		$waitTimeInSeconds = isset($this->conf['waitTimeInSeconds']) ? (int)$this->conf['waitTimeInSeconds'] : 0;
-		if ($waitTimeInSeconds === 0) {
-			$waitTimeInSeconds = 10;
-		}
-		$secondsWaited = 0;
-		while ($this->processIsRunning($processId)) {
-			sleep(1);
-			$secondsWaited++;
-			if ($secondsWaited > $waitTimeInSeconds) {
-				exec('kill ' . $processId);
-				throw new \RuntimeException('PDF generation did not finish in a reasonable amount of time' . ($this->conf['debug'] ? ': ' . $scriptCall : '.'));
+		if ($cachingEnabled && $this->cacheManager->isInCache($urls)) {
+			$fileIdentifier = $this->cacheManager->get($urls);
+			/** @var \TYPO3\CMS\Core\Resource\File $file */
+			$pdfFile = $this->outputDirectory->getStorage()->getFile($fileIdentifier);
+			if (isset($file) && !$file->isMissing()) {
+				return $pdfFile;
+			} else {
+				$this->cacheManager->remove($urls);
 			}
 		}
 
-		if (!file_exists($this->filename)) {
-			throw new \RuntimeException('PDF generator did not create a PDF file');
+		$this->tempFile = GeneralUtility::tempnam('tx_webkitpdf_temp_' . sha1(uniqid('tx_webkitpdf_temp_', TRUE)));
+
+		$pdfGenerator = $this->getPdfGenerator();
+		$pdfGenerator->generatePdf($urls, $this->tempFile);
+
+		if (filesize($this->tempFile) > 0) {
+			$pdfFile = $this->outputDirectory->addFile($this->tempFile, $this->filenameStorage, 'changeName');
+		} else {
+			throw new \RuntimeException('The PDF generator did not fill the PDF file with contents.');
 		}
+
+		if ($cachingEnabled) {
+			$this->cacheManager->store($urls, $pdfFile->getIdentifier(), $this->getRelatedPageUids());
+		}
+
+		return $pdfFile;
 	}
 
 	/**
-	 * Executes the given Script call in the foreground and writes the output to the log.
+	 * Initializes a PDF generator instance with all required config options.
 	 *
-	 * @param string $scriptCall
-	 * @return void
+	 * @return \Tx\Webkitpdf\Generator\PdfGeneratorInterface
 	 */
-	protected function createPdfInForeground($scriptCall) {
-		$output = array();
-		$scriptCall .= ' 2>&1';
-		exec($scriptCall, $output);
-		PdfUtility::debugLogging('Executed shell command in foreground', -1, array($scriptCall));
-		PdfUtility::debugLogging('Output of shell command', -1, $output);
-	}
+	protected function getPdfGenerator() {
 
-	protected function readScriptSettings() {
-		$defaultSettings = array(
-			'footer-right' => '[page]/[toPage]',
-			'footer-font-size' => '6',
-			'header-font-size' => '6',
-			'margin-left' => '15mm',
-			'margin-right' => '15mm',
-			'margin-top' => '15mm',
-			'margin-bottom' => '15mm',
-		);
+		$pdfGenerator = GeneralUtility::makeInstance(PdfGeneratorFactory::class)->getPdfGenerator($this->pdfGenerator);
 
-		$tsSettings = $this->conf['scriptParams'];
-		foreach ($defaultSettings as $param => $value) {
-			if (!isset($tsSettings[$param])) {
-				$tsSettings[$param] = $value;
-			}
-		}
+		$pdfGenerator->setWebkitExecutablePath($this->scriptPath);
 
-		$finalSettings = array();
-		foreach ($tsSettings as $param => $value) {
-			$value = trim($value);
-			if (substr($param, 0, 2) !== '--') {
-				$param = '--' . $param;
-			}
-			$finalSettings[$param] = $value;
-		}
-		return $finalSettings;
+		$generatorOptions = isset($this->conf['pdfGenerators'][$this->pdfGenerator]) ? $this->conf['pdfGenerators'][$this->pdfGenerator]: array();
+		$pdfGenerator->setGeneratorOptions($generatorOptions);
+
+		$pdfGenerator->setIsDebugEnabled(!empty($this->conf['debug']));
+
+		$this->initializeScriptOptions($pdfGenerator);
+
+		return $pdfGenerator;
 	}
 
 	/**
-	 * Creates the parameters for the wkhtmltopdf call.
+	 * Returns an array containing the UIDs to which the currently generated PDF document belongs.
 	 *
-	 * @return string The parameter string
+	 * @return array
 	 */
-	protected function buildScriptOptions() {
-		$options = array();
-		if ($this->conf['pageURLInHeader']) {
-			$options['--header-center'] = '[webpage]';
+	protected function getRelatedPageUids() {
+
+		$pageUids = array();
+
+		if (!empty($this->options['relatedPageUids'])) {
+			GeneralUtility::trimExplode(',', $this->options['relatedPageUids'], TRUE);
 		}
 
-		if ($this->conf['copyrightNotice']) {
-			$options['--footer-left'] = '© ' . date('Y', time()) . $this->conf['copyrightNotice'] . '';
-		}
-
-		if ($this->conf['additionalStylesheet']) {
-			$this->conf['additionalStylesheet'] = $this->sanitizePath($this->conf['additionalStylesheet'], FALSE);
-			$options['--user-style-sheet'] = GeneralUtility::getIndpEnv('TYPO3_REQUEST_HOST') . $this->conf['additionalStylesheet'];
-
-		}
-
-		$userSettings = $this->readScriptSettings();
-		$options = array_merge($options, $userSettings);
-
-		$paramsString = '';
-		foreach ($options as $param => $value) {
-			if (strlen($value) > 0) {
-				$value = '"' . $value . '"';
-			}
-			$paramsString .= ' ' . $param . ' ' . $value;
-		}
-
-		if (!empty($this->conf['overrideUserAgent'])) {
-			$paramsString = ' --custom-header-propagation --custom-header \'User-Agent\' \'' . $this->conf['overrideUserAgent'] . '\' ';
-		}
-
-		return $paramsString;
+		return $pageUids;
 	}
 
 	/**
-	 * Makes sure that given path has a slash as first and last character
+	 * Dumps the PDF file contents.
 	 *
-	 * @param    string $path : The path to be sanitized
-	 * @return    string        Sanitized path
+	 * @param \TYPO3\CMS\Core\Resource\File $file
 	 */
-	protected function sanitizePath($path, $trailingSlash = TRUE) {
+	protected function dumpPdfFile($file) {
 
-		// slash as last character
-		if ($trailingSlash && substr($path, (strlen($path) - 1)) !== '/') {
-			$path .= '/';
-		}
+		header('Content-Transfer-Encoding: Binary');
+		header('X-Robots-Tag: noindex');
 
-		//slash as first character
-		if (substr($path, 0, 1) !== '/') {
-			$path = '/' . $path;
-		}
-
-		return $path;
+		$file->getStorage()->dumpFileContents($file, !$this->useInlineContentDisposition, $this->filenameDownload);
 	}
 
 	/**
-	 * Checks if the process with the given ID is still running.
+	 * Checks if caching should be enabled for this call.
 	 *
-	 * @param int $processId
 	 * @return bool
 	 */
-	protected function processIsRunning($processId) {
-		$result = shell_exec(sprintf("ps %d", $processId));
-		if (count(preg_split("/\n/", $result)) > 2) {
-			return TRUE;
-		} else {
+	protected function isCachingEnabled() {
+
+		if (!empty($this->options['disableCache'])) {
 			return FALSE;
+		}
+
+		if (!empty($this->options['debug'])) {
+			return FALSE;
+		}
+
+		if (!empty($GLOBALS['TSFE']->loginUser)) {
+			return FALSE;
+		}
+
+		return TRUE;
+	}
+
+	/**
+	 * Initializes the script options in the given PDF generator.
+	 *
+	 * @param \Tx\Webkitpdf\Generator\PdfGeneratorInterface $pdfGenerator
+	 * @return string The parameter string
+	 */
+	protected function initializeScriptOptions($pdfGenerator) {
+
+		if (!empty($this->options['pageURLInHeader'])) {
+			$pdfGenerator->setOption('header-center', '[webpage]');
+		}
+
+		if (!empty($this->options['copyrightNotice'])) {
+			$pdfGenerator->setOption('footer-left', '© ' . date('Y', time()) . $this->options['copyrightNotice']);
+		}
+
+		if (!empty($this->options['additionalStylesheet'])) {
+			$pdfGenerator->setOption('user-style-sheet', $this->options['additionalStylesheet']);
+		}
+
+		if (!empty($this->options['overrideUserAgent'])) {
+			$pdfGenerator->setOption('custom-header-propagation', '');
+			$pdfGenerator->setOption('custom-header', '\'User-Agent\' \'' . $this->options['overrideUserAgent'] . '\'');
+		}
+
+		foreach ($this->conf['scriptParams'] as $name => $value) {
+			$pdfGenerator->setOption($name, $value);
 		}
 	}
 
@@ -401,16 +445,10 @@ class PdfController extends AbstractPLugin {
 		// Get TS values and process stdWrap properties
 		if (is_array($tsSettings)) {
 			foreach ($tsSettings as $key => $value) {
-				$process = TRUE;
-				if (substr($key, -1) === '.') {
-					$key = substr($key, 0, -1);
-					if (array_key_exists($key, $tsSettings)) {
-						$process = FALSE;
-					}
-				}
 
-				if ((substr($key, -1) === '.' && !array_key_exists(substr($key, 0, -1), $tsSettings)) ||
-					(substr($key, -1) !== '.' && array_key_exists($key . '.', $tsSettings)) && !strstr($key, 'scriptParams')
+				if (
+					(substr($key, -1) === '.' && !array_key_exists(substr($key, 0, -1), $tsSettings))
+					|| (substr($key, -1) !== '.' && array_key_exists($key . '.', $tsSettings))
 				) {
 
 					$tsSettings[$key] = $this->cObj->stdWrap($value, $tsSettings[$key . '.']);
@@ -422,6 +460,7 @@ class PdfController extends AbstractPLugin {
 				}
 			}
 		}
+
 		return $tsSettings;
 	}
 }
