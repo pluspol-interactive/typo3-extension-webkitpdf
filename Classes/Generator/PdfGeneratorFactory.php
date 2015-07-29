@@ -77,20 +77,20 @@ class PdfGeneratorFactory implements SingletonInterface {
 	public function getPdfGeneratorForConfig(array $config) {
 
 		$pdfGeneratorType = 'foreground';
-		if (!empty($config['customPdfGenerator'])) {
-			$pdfGeneratorType = $config['customPdfGenerator'];
+		if (!empty($config['options']['customPdfGenerator'])) {
+			$pdfGeneratorType = $config['options']['customPdfGenerator'];
 		}
 
 		$pdfGenerator = $this->getPdfGenerator($pdfGeneratorType);
 
-		if (!empty($config['customScriptPath'])) {
-			$pdfGenerator->setWebkitExecutablePath($config['customScriptPath']);;
+		if (!empty($config['options']['customScriptPath'])) {
+			$pdfGenerator->setWebkitExecutablePath($config['options']['customScriptPath']);;
 		}
 
 		$generatorOptions = isset($config['pdfGenerators'][$pdfGeneratorType]) ? $config['pdfGenerators'][$pdfGeneratorType] : array();
 		$pdfGenerator->setGeneratorOptions($generatorOptions);
 
-		$pdfGenerator->setIsDebugEnabled(!empty($config['debug']));
+		$pdfGenerator->setIsDebugEnabled(!empty($config['options']['debug']));
 
 		return $pdfGenerator;
 	}
