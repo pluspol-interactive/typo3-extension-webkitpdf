@@ -437,7 +437,7 @@ class PdfController extends AbstractPLugin {
 
 		if (!empty($this->options['overrideUserAgent'])) {
 			$pdfGenerator->setOption('custom-header-propagation', '');
-			$pdfGenerator->setOption('custom-header', '\'User-Agent\' \'' . $this->options['overrideUserAgent'] . '\'');
+			$pdfGenerator->setOption('custom-header', array('User-Agent', $this->options['overrideUserAgent']));
 		}
 
 		foreach ($this->conf['scriptParams'] as $name => $value) {
