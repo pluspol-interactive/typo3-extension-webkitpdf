@@ -26,6 +26,7 @@ namespace Tx\Webkitpdf\Generator;
 
 use Tx\Webkitpdf\Utility\PdfUtility;
 use TYPO3\CMS\Core\Utility\ArrayUtility;
+use TYPO3\CMS\Core\Utility\CommandUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -75,11 +76,11 @@ abstract class AbstractPdfGenerator implements PdfGeneratorInterface {
 	protected $pdfUtility;
 
 	/**
-	 * Path to the webkit executable.
+	 * Name of the webkit executable.
 	 *
 	 * @var string
 	 */
-	protected $webkitExecutable = '/usr/bin/wkthmltopdf';
+	protected $webkitExecutable = 'wkhtmltopdf';
 
 	/**
 	 * Dispatches the PDF generation in the concrete PDF generator.
@@ -105,7 +106,13 @@ abstract class AbstractPdfGenerator implements PdfGeneratorInterface {
 	 */
 	public function generatePdf(array $urls, $fileName) {
 
-		$scriptCall = $this->webkitExecutable . ' ' .
+		$wkhtmltopdf = CommandUtility::getCommand($this->webkitExecutable);
+
+		if (!$wkhtmltopdf) {
+			throw new \RuntimeException(sprintf('The path to %s could not be determined. Please check your path configuration.', $this->webkitExecutable), 1438182639);
+		}
+
+		$scriptCall = $wkhtmltopdf . ' ' .
 			$this->buildScriptOptions() . ' ' .
 			$this->getUrlsParameter($urls) . ' ' .
 			escapeshellarg($fileName);

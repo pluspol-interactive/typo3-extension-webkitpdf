@@ -24,6 +24,7 @@ namespace Tx\Webkitpdf\Generator;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
+use TYPO3\CMS\Core\Utility\CommandUtility;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -93,7 +94,13 @@ class BackgroundPdfGenerator extends AbstractPdfGenerator implements PdfGenerato
 	 * @return bool
 	 */
 	protected function processIsRunning($processId) {
-		$result = shell_exec(sprintf("ps %d", $processId));
+		$psCmd = CommandUtility::getCommand('ps');
+
+		if (!$psCmd) {
+			throw new \RuntimeException('The path to ps could not be determined. Please check your path configuration.', 1438182630);
+		}
+
+		$result = shell_exec(sprintf($psCmd . $processId));
 		if (count(preg_split("/\n/", $result)) > 2) {
 			return TRUE;
 		} else {
