@@ -326,7 +326,7 @@ class PdfController extends AbstractPLugin {
 
 		if ($cachingEnabled && $this->cacheManager->isInCache($urls)) {
 			$fileIdentifier = $this->cacheManager->get($urls);
-			/** @var \TYPO3\CMS\Core\Resource\File $file */
+			/** @var \TYPO3\CMS\Core\Resource\File $pdfFile */
 			$pdfFile = $this->outputDirectory->getStorage()->getFile($fileIdentifier);
 			if (isset($pdfFile) && !$pdfFile->isMissing()) {
 				return $pdfFile;
