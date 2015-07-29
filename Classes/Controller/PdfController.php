@@ -279,14 +279,14 @@ class PdfController extends AbstractPLugin {
 				$allowedHosts = GeneralUtility::trimExplode(',', $this->options['allowedHosts']);
 			}
 
-			foreach ($urls as &$url) {
+			foreach ($urls as $key => $url) {
 
 				// Do not use cache if a Frontend use is logged in and append the session ID to the URLs.
 				if ($GLOBALS['TSFE']->loginUser) {
 					$url = $this->pdfUtility->appendFESessionInfoToURL($url);
 				}
 
-				$url = $this->pdfUtility->sanitizeURL($url, $allowedHosts);
+				$urls[$key] = $this->pdfUtility->sanitizeURL($url, $allowedHosts);
 			}
 
 			$pdfFile = $this->generatePdfOrReadFromCache($urls);
@@ -328,7 +328,7 @@ class PdfController extends AbstractPLugin {
 			$fileIdentifier = $this->cacheManager->get($urls);
 			/** @var \TYPO3\CMS\Core\Resource\File $file */
 			$pdfFile = $this->outputDirectory->getStorage()->getFile($fileIdentifier);
-			if (isset($file) && !$file->isMissing()) {
+			if (isset($pdfFile) && !$pdfFile->isMissing()) {
 				return $pdfFile;
 			} else {
 				$this->cacheManager->remove($urls);
