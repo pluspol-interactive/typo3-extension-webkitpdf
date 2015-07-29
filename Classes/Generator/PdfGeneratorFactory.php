@@ -66,4 +66,36 @@ class PdfGeneratorFactory implements SingletonInterface {
 
 		return $pdfGenerator;
 	}
+
+	/**
+	 * Creates a PDF generator instance based on the given config and initializes it
+	 * with the configuration options passes in the config array.
+	 *
+	 * @param array $config
+	 * @return PdfGeneratorInterface
+	 */
+	public function getPdfGeneratorForConfig(array $config) {
+
+		$pdfGeneratorType = 'foreground';
+		if (!empty($config['customPdfGenerator'])) {
+			$pdfGeneratorType = $config['customPdfGenerator'];
+		}
+
+		$pdfGenerator = $this->getPdfGenerator($pdfGeneratorType);
+
+
+		$scriptPath = '/usr/bin/wkhtmltopdf';
+		if (!empty($config['customScriptPath'])) {
+			$scriptPath = $config['customScriptPath'];
+		}
+
+		$pdfGenerator->setWebkitExecutablePath($scriptPath);
+
+		$generatorOptions = isset($config['pdfGenerators'][$pdfGeneratorType]) ? $config['pdfGenerators'][$pdfGeneratorType] : array();
+		$pdfGenerator->setGeneratorOptions($generatorOptions);
+
+		$pdfGenerator->setIsDebugEnabled(!empty($config['debug']));
+
+		return $pdfGenerator;
+	}
 }

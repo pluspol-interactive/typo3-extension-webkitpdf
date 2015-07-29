@@ -74,14 +74,6 @@ class PdfController extends AbstractPLugin {
 	protected $cacheManager;
 
 	/**
-	 * The full patch to the wkhtmltopdf script.
-	 * Can be overwritten with the "customScriptPath" setting.
-	 *
-	 * @var string
-	 */
-	protected $scriptPath = '/usr/bin/wkhtmltopdf';
-
-	/**
 	 * The output path to which the PDF are written.
 	 * By default /typo3temp/tx_webkitpdf/ is used.
 	 * Can be overwritten with the "customTempOutputPath" option.
@@ -136,13 +128,6 @@ class PdfController extends AbstractPLugin {
 	protected $pdfUtility;
 
 	/**
-	 * The identifier of the PDF generator that should be used.
-	 *
-	 * @var string
-	 */
-	protected $pdfGenerator = 'foreground';
-
-	/**
 	 * All values from the "options" namespace in the TypoScript configuration.
 	 *
 	 * @var array
@@ -190,14 +175,6 @@ class PdfController extends AbstractPLugin {
 
 		$storageUid = empty($this->options['storageUid']) ? 0 : (int)$this->options['storageUid'];
 		$outputStorage = ResourceFactory::getInstance()->getStorageObject($storageUid);
-
-		if (!empty($this->options['customScriptPath'])) {
-			$this->scriptPath = $this->options['customScriptPath'];
-		}
-
-		if (!empty($this->options['customPdfGenerator'])) {
-			$this->pdfGenerator = $this->options['customPdfGenerator'];
-		}
 
 		$outputPath = empty($this->options['customTempOutputPath']) ? '/typo3temp/tx_webkitpdf/' : $this->options['customTempOutputPath'];
 		if (!$outputStorage->hasFolder($outputPath)) {
@@ -382,18 +359,8 @@ class PdfController extends AbstractPLugin {
 	 * @return \Tx\Webkitpdf\Generator\PdfGeneratorInterface
 	 */
 	protected function getPdfGenerator() {
-
-		$pdfGenerator = GeneralUtility::makeInstance(PdfGeneratorFactory::class)->getPdfGenerator($this->pdfGenerator);
-
-		$pdfGenerator->setWebkitExecutablePath($this->scriptPath);
-
-		$generatorOptions = isset($this->conf['pdfGenerators'][$this->pdfGenerator]) ? $this->conf['pdfGenerators'][$this->pdfGenerator]: array();
-		$pdfGenerator->setGeneratorOptions($generatorOptions);
-
-		$pdfGenerator->setIsDebugEnabled(!empty($this->conf['debug']));
-
+		$pdfGenerator = GeneralUtility::makeInstance(PdfGeneratorFactory::class)->getPdfGeneratorForConfig($this->conf);
 		$this->initializeScriptOptions($pdfGenerator);
-
 		return $pdfGenerator;
 	}
 
