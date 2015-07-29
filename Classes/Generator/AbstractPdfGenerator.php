@@ -133,8 +133,11 @@ abstract class AbstractPdfGenerator implements PdfGeneratorInterface {
 	}
 
 	/**
-	 * @param string $option
-	 * @param string $value
+	 * Sets / overrides an option that is passed to the wkthmltopdf script.
+	 *
+	 * @param string $option The name of the option.
+	 * @param mixed $value Can be a string with the option value or an array for options that accept multiple parameters.
+	 * @return void
 	 */
 	public function setOption($option, $value) {
 		$this->customOptions[$option] = $value;
@@ -165,9 +168,19 @@ abstract class AbstractPdfGenerator implements PdfGeneratorInterface {
 
 			$optionString .= ' --' . $optionName;
 
-			if (!empty($optionValue)) {
-				$optionString .= ' ' . escapeshellarg($optionValue);
+			if (empty($optionValue)) {
+				continue;
 			}
+
+			if (is_string($optionValue)) {
+				$optionString .= ' ' . escapeshellarg($optionValue);
+			} elseif (is_array($optionValue)) {
+				array_walk($optionValue, function(&$singleValue) {
+					$singleValue = escapeshellarg($singleValue);
+				});
+				$optionString .= ' ' . implode(' ', $optionValue);
+			}
+
 		}
 
 		return trim($optionString);

@@ -56,8 +56,8 @@ interface PdfGeneratorInterface {
 	/**
 	 * Sets / overrides an option that is passed to the wkthmltopdf script.
 	 *
-	 * @param string $option
-	 * @param string $value
+	 * @param string $option The name of the option.
+	 * @param mixed $value Can be a string with the option value or an array for options that accept multiple parameters.
 	 * @return void
 	 */
 	public function setOption($option, $value);
