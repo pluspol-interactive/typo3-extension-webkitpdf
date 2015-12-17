@@ -52,12 +52,15 @@ class BackgroundPdfGenerator extends AbstractPdfGenerator implements PdfGenerato
 	protected function dispatchPdfGeneration($scriptCall) {
 
 		$logFile = empty($this->generatorOptions['logFile']) ? '' : GeneralUtility::getFileAbsFileName($this->generatorOptions['logFile'], TRUE);
-		$logFile = substr($logFile, strlen(PATH_site));
-		$logDir = dirname($logFile);
+
 		if ($logFile === '') {
 			$logFile = '/dev/null';
-		} else if (!@is_dir(PATH_site . $logDir)) {
-			GeneralUtility::mkdir_deep(PATH_site, $logDir);
+		} else {
+			$logFile = substr($logFile, strlen(PATH_site));
+			$logDir = dirname($logFile);
+			if (!@is_dir(PATH_site . $logDir)) {
+				GeneralUtility::mkdir_deep(PATH_site, $logDir);
+			}
 		}
 
 		$scriptCall .= ' >> ' . escapeshellarg($logFile) . ' 2>&1 & echo $!';
