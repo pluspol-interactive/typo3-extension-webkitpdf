@@ -56,10 +56,9 @@ class BackgroundPdfGenerator extends AbstractPdfGenerator implements PdfGenerato
 		if ($logFile === '') {
 			$logFile = '/dev/null';
 		} else {
-			$logFile = substr($logFile, strlen(PATH_site));
 			$logDir = dirname($logFile);
-			if (!@is_dir(PATH_site . $logDir)) {
-				GeneralUtility::mkdir_deep(PATH_site, $logDir);
+			if (!@is_dir($logDir)) {
+				GeneralUtility::mkdir_deep($logDir);
 			}
 		}
 
