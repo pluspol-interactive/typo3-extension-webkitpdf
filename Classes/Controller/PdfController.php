@@ -147,6 +147,11 @@ class PdfController extends AbstractPLugin {
 
 		$this->buildStaticFileNameInPageContext($conf);
 
+		if (!empty($conf['options.']['additionalStylesheet']) && !empty($conf['options.']['additionalStylesheet.']['getFileAbsFileName'])) {
+			$conf['options.']['additionalStylesheet'] = GeneralUtility::getFileAbsFileName($conf['options.']['additionalStylesheet']);
+			unset($conf['options.']['additionalStylesheet.']['getFileAbsFileName']);
+		}
+
 		foreach (array('options', 'scriptParams') as $typoScriptPath) {
 
 			$conf[$typoScriptPath] = array();

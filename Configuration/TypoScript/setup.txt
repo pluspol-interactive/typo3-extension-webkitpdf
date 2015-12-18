@@ -38,6 +38,7 @@ plugin.tx_webkitpdf_pi1 {
 		pageURLInHeader = 0
 		copyrightNotice = 0
 		additionalStylesheet =
+		additionalStylesheet.getFileAbsFileName = 0
 		overrideUserAgent =
 		fileOnly = 0
 		allowedHosts =
