@@ -30,6 +30,11 @@ plugin.tx_webkitpdf_pi1 {
 				}
 			}
 		}
+
+		// Do not display the PDF link on the page where the plugin is located.
+		if.value = {$plugin.tx_webkitpdf_pi1.pdfLink.pluginPid}
+		if.equals.data = TSFE:id
+		if.negate = 1
 	}
 
 	options {
