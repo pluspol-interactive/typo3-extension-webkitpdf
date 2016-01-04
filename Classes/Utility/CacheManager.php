@@ -53,6 +53,41 @@ class CacheManager {
 	}
 
 	/**
+	 * Will be called by the garbage collection of the CacheDatabaseBackend
+	 * and removes all PDF files from the directory that do not have a
+	 * valid matching cache entry.
+	 */
+	public function collectGarbage() {
+		foreach ($this->getCacheDirectory()->getFiles() as $file) {
+			if ($file->getName() === '.htaccess') {
+				continue;
+			}
+			if (!$this->cache->has($file->getName())) {
+				$file->delete();
+			}
+		}
+	}
+
+	/**
+	 * Fetches the file identifier of the PDF document.
+	 *
+	 * @param array $urls Array of the URLs that should be retrieved by the PDF generator.
+	 * @return File The file identifier.
+	 */
+	public function get(array $urls) {
+
+		$entryIdentifier = $this->getEntryIdentifier($urls);
+		$cacheIsValid = $this->cache->has($entryIdentifier);
+		$cachedPdf = $this->getCachedPdfForIdentifier($entryIdentifier, !$cacheIsValid);
+
+		if (!isset($cachedPdf) && $cacheIsValid) {
+			$this->cache->remove($entryIdentifier);
+		}
+
+		return $cachedPdf;
+	}
+
+	/**
 	 * Returns TRUE when there is a cache entry available for the given URLs.
 	 *
 	 * @param array $urls Comma seperated list of URLs that were used to generate the PDF.
@@ -61,6 +96,18 @@ class CacheManager {
 	public function isInCache(array $urls) {
 		$cachedPdf = $this->get($urls);
 		return isset($cachedPdf);
+	}
+
+	/**
+	 * Removes the entry for the given URLs from the cache.
+	 *
+	 * @param array $urls Array of the URLs that should be retrieved by the PDF generator.
+	 * @return string The PDF file contents.
+	 */
+	public function remove(array $urls) {
+		$entryIdentifier = $this->getEntryIdentifier($urls);
+		$this->getCachedPdfForIdentifier($entryIdentifier, TRUE);
+		$this->cache->remove($this->getEntryIdentifier($urls));
 	}
 
 	/**
@@ -101,37 +148,6 @@ class CacheManager {
 
 		$this->cache->set($entryIdentifier, $entryIdentifier, $pageIds);
 		return $file;
-	}
-
-	/**
-	 * Fetches the file identifier of the PDF document.
-	 *
-	 * @param array $urls Array of the URLs that should be retrieved by the PDF generator.
-	 * @return File The file identifier.
-	 */
-	public function get(array $urls) {
-
-		$entryIdentifier = $this->getEntryIdentifier($urls);
-		$cacheIsValid = $this->cache->has($entryIdentifier);
-		$cachedPdf = $this->getCachedPdfForIdentifier($entryIdentifier, !$cacheIsValid);
-
-		if (!isset($cachedPdf) && $cacheIsValid) {
-			$this->cache->remove($entryIdentifier);
-		}
-
-		return $cachedPdf;
-	}
-
-	/**
-	 * Removes the entry for the given URLs from the cache.
-	 *
-	 * @param array $urls Array of the URLs that should be retrieved by the PDF generator.
-	 * @return string The PDF file contents.
-	 */
-	public function remove(array $urls) {
-		$entryIdentifier = $this->getEntryIdentifier($urls);
-		$this->getCachedPdfForIdentifier($entryIdentifier, TRUE);
-		$this->cache->remove($this->getEntryIdentifier($urls));
 	}
 
 	/**

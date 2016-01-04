@@ -1,5 +1,8 @@
-	# cat=basic; type=integer; label=Cache lifetime: The lifetime of the generated PDF documents in seconds (defaults to 30 days).
+	# cat=basic; type=integer; label=Cache lifetime: The lifetime of the generated PDF documents in seconds (defaults to 30 days). IMPORTANT: to clear disk space you need to set up the cache garbage collection task in the scheduler.
 cacheLifetime = 2592000
+
+	# cat=basic; type=integer; label=Cache limit: If set only that number of entries will be stored in the PDF cache. IMPORTANT: to clear disk space you need to set up the cache garbage collection task in the scheduler.
+cacheLimit = 0
 
 	# cat=basic; type=boolean; label=Debug: If enabled, debug messages are written to TYPO3 devLog. You also need to have a devlog extension installed to see the messages.
 debug = 0
