@@ -1,4 +1,8 @@
 	# cat=basic; type=integer; label=Cache lifetime: The lifetime of the generated PDF documents in seconds (defaults to 30 days).
 cacheLifetime = 2592000
+
 	# cat=basic; type=boolean; label=Debug: If enabled, debug messages are written to TYPO3 devLog. You also need to have a devlog extension installed to see the messages.
 debug = 0
+
+	# cat=basic; type=string; label=PDF cache folder identifier: The combined FAL identifier of the folder where the cached PDF documents are stored (consisting of <storageUid>:<folderIdentfier>).
+pdfCacheFolderIdentifier = 0:/typo3temp/tx_webkitpdf/

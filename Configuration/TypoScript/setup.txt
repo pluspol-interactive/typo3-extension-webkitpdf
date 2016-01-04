@@ -54,7 +54,6 @@ plugin.tx_webkitpdf_pi1 {
 		customParameterName =
 		customPdfGenerator =
 		customScriptPath =
-		storageUid = 0
 		staticFileName =
 
 		// If a page context is available we generate a static filename based on the UID and the title of the page.

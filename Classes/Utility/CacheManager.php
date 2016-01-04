@@ -24,6 +24,8 @@ namespace Tx\Webkitpdf\Utility;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
+use TYPO3\CMS\Core\Resource\File;
+use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 /**
@@ -57,37 +59,67 @@ class CacheManager {
 	 * @return bool
 	 */
 	public function isInCache(array $urls) {
-		return $this->cache->has($this->getEntryIdentifier($urls));
+		$cachedPdf = $this->get($urls);
+		return isset($cachedPdf);
 	}
 
 	/**
-	 * Stores the contents of the given file in the cache.
+	 * Stores the given temporary PDF file in the cache directory.
 	 *
 	 * When page IDs are provided the cache entry will be tagged with these page IDs to make
 	 * sure the PDF cache is flushed when the page changes.
 	 *
+	 * If caching is disabled a unique entry identifier will be used
+	 * and it will not be stored in the cache backend.
+	 *
 	 * @param array $urls Array of the URLs that should be retrieved by the PDF generator.
-	 * @param string $fileIdentifier The file identifier of the generated PDF file.
+	 * @param string $tempFile The temporary file created by the PDF generator.
 	 * @param array $pageIds Array containing the page UIDs for which the PDF was generated.
+	 * @param bool $cachingEnabled Use a unique file identifier and
+	 * @return File
 	 */
-	public function store(array $urls, $fileIdentifier, $pageIds = array()) {
+	public function store(array $urls, $tempFile, $pageIds = array(), $cachingEnabled) {
+
+		$entryIdentifier = $this->getEntryIdentifier($urls);
+		$conflictMode = 'replace';
+
+		if (!$cachingEnabled) {
+			$entryIdentifier = uniqid($entryIdentifier, TRUE);
+			$conflictMode = 'changeName';
+		}
+
+		$file = $this->getCacheDirectory()->addFile($tempFile, $entryIdentifier, $conflictMode);
+
+		if (!$cachingEnabled) {
+			return $file;
+		}
 
 		// Convert the page UIDs to cache tags.
 		array_walk($pageIds, function (&$tag) {
 			$tag = 'pageId_' . intval($tag);
 		});
 
-		$this->cache->set($this->getEntryIdentifier($urls), $fileIdentifier, $pageIds);
+		$this->cache->set($entryIdentifier, $entryIdentifier, $pageIds);
+		return $file;
 	}
 
 	/**
 	 * Fetches the file identifier of the PDF document.
 	 *
 	 * @param array $urls Array of the URLs that should be retrieved by the PDF generator.
-	 * @return string The file identifier.
+	 * @return File The file identifier.
 	 */
 	public function get(array $urls) {
-		return $this->cache->get($this->getEntryIdentifier($urls));
+
+		$entryIdentifier = $this->getEntryIdentifier($urls);
+		$cacheIsValid = $this->cache->has($entryIdentifier);
+		$cachedPdf = $this->getCachedPdfForIdentifier($entryIdentifier, !$cacheIsValid);
+
+		if (!isset($cachedPdf) && $cacheIsValid) {
+			$this->cache->remove($entryIdentifier);
+		}
+
+		return $cachedPdf;
 	}
 
 	/**
@@ -97,7 +129,78 @@ class CacheManager {
 	 * @return string The PDF file contents.
 	 */
 	public function remove(array $urls) {
+		$entryIdentifier = $this->getEntryIdentifier($urls);
+		$this->getCachedPdfForIdentifier($entryIdentifier, TRUE);
 		$this->cache->remove($this->getEntryIdentifier($urls));
+	}
+
+	/**
+	 * Makes sure a .htaccess file exists in the given folder that denies all access.
+	 *
+	 * @param \TYPO3\CMS\Core\Resource\Folder $folder
+	 */
+	protected function createHtaccessInCacheFolder($folder) {
+
+		if ($folder->hasFile('.htaccess')) {
+			return;
+		}
+
+		$tempHtaccess = GeneralUtility::tempnam(static::CACHE_IDENTIFIER, 'cache_htaccess');
+		file_put_contents($tempHtaccess, 'Deny from all');
+		$folder->addFile($tempHtaccess, '.htaccess');
+		GeneralUtility::unlink_tempfile($tempHtaccess);
+	}
+
+	/**
+	 * Makes sure the configured PDF document cache directory exists in the configured storage
+	 * and returns the matching Folder object.
+	 *
+	 * @throws \InvalidArgumentException
+	 * @return \TYPO3\CMS\Core\Resource\Folder
+	 */
+	protected function getCacheDirectory() {
+
+		$outputStorage = ResourceFactory::getInstance()->getStorageObjectFromCombinedIdentifier($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['webkitpdf']['pdfCacheFolderIdentifier']);
+
+		$folderIdentifierParts = GeneralUtility::trimExplode(':', $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['webkitpdf']['pdfCacheFolderIdentifier']);
+		if (empty($folderIdentifierParts[1])) {
+			throw new \InvalidArgumentException('The pdfCacheFolderIdentifier extension config seems to be invalid. The folder identifier is empty.');
+		}
+
+		$folderIdentifier = $folderIdentifierParts[1];
+		if (!$outputStorage->hasFolder($folderIdentifier)) {
+			$outputStorage->createFolder($folderIdentifier);
+		}
+
+		$folder = ResourceFactory::getInstance()->getFolderObjectFromCombinedIdentifier($GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['webkitpdf']['pdfCacheFolderIdentifier']);
+		$this->createHtaccessInCacheFolder($folder);
+
+		return $folder;
+	}
+
+
+	/**
+	 * Returns a File instance to the cached PDF document if it exists and if $removeIfExists is FALSE.
+	 * Otherwise NULL is returned.
+	 *
+	 * @param string $entryIdentifier The file idenifier (identical to the cache identifier).
+	 * @param bool $removeIfExists If TRUE the file will be removed if it exists.
+	 * @return File|NULL
+	 */
+	protected function getCachedPdfForIdentifier($entryIdentifier, $removeIfExists) {
+
+		$cacheDirectory = $this->getCacheDirectory();
+		if (!$cacheDirectory->hasFile($entryIdentifier)) {
+			return NULL;
+		}
+
+		$file = ResourceFactory::getInstance()->getFileObjectFromCombinedIdentifier($cacheDirectory->getCombinedIdentifier() . $entryIdentifier);
+		if ($removeIfExists) {
+			$file->delete();
+			return NULL;
+		} else {
+			return $file;
+		}
 	}
 
 	/**
@@ -107,6 +210,6 @@ class CacheManager {
 	 * @return string The cache identifier that should be used for the given URL array.
 	 */
 	protected function getEntryIdentifier(array $urls) {
-		return sha1(implode(', ', $urls));
+		return GeneralUtility::hmac(implode(', ', $urls), static::CACHE_IDENTIFIER);
 	}
 }

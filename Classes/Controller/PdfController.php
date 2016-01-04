@@ -27,7 +27,6 @@ namespace Tx\Webkitpdf\Controller;
 use Tx\Webkitpdf\Generator\PdfGeneratorFactory;
 use Tx\Webkitpdf\Utility\CacheManager;
 use Tx\Webkitpdf\Utility\PdfUtility;
-use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\HttpUtility;
 use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
@@ -74,15 +73,6 @@ class PdfController extends AbstractPLugin {
 	protected $cacheManager;
 
 	/**
-	 * The output path to which the PDF are written.
-	 * By default /typo3temp/tx_webkitpdf/ is used.
-	 * Can be overwritten with the "customTempOutputPath" option.
-	 *
-	 * @var \TYPO3\CMS\Core\Resource\Folder
-	 */
-	protected $outputDirectory;
-
-	/**
 	 * The name of the GET parameter in which the URLs that should be converted
 	 * to PDFs are passed to the plugin. "urls" is used by default but can be
 	 * overwritten with the "customParameterName" option.^
@@ -90,13 +80,6 @@ class PdfController extends AbstractPLugin {
 	 * @var string
 	 */
 	protected $paramName = 'urls';
-
-	/**
-	 * Absolute path to the temporary file in which the PDF is stored.
-	 *
-	 * @var string
-	 */
-	protected $tempFile;
 
 	/**
 	 * The value that is used for th Content-Disposition header. By default attachment is used.
@@ -177,16 +160,6 @@ class PdfController extends AbstractPLugin {
 		$this->options = $conf['options'];
 
 		$this->pi_setPiVarDefaults();
-
-		$storageUid = empty($this->options['storageUid']) ? 0 : (int)$this->options['storageUid'];
-		$outputStorage = ResourceFactory::getInstance()->getStorageObject($storageUid);
-
-		$outputPath = empty($this->options['customTempOutputPath']) ? '/typo3temp/tx_webkitpdf/' : $this->options['customTempOutputPath'];
-		if (!$outputStorage->hasFolder($outputPath)) {
-			$outputStorage->createFolder($outputPath);
-		}
-		$this->outputDirectory = $outputStorage->getFolder($outputPath);
-
 
 		if (!empty($this->options['customParameterName'])) {
 			$this->paramName = $this->options['customParameterName'];
@@ -314,10 +287,6 @@ class PdfController extends AbstractPLugin {
 			$content .= $this->cObj->cObjGetSingle($this->conf['contentObjects.']['errorMessage'], $this->conf['contentObjects.']['errorMessage.']);
 		}
 
-		if (!empty($this->tempFile)) {
-			GeneralUtility::unlink_tempfile($this->tempFile);
-		}
-
 		return $this->pi_wrapInBaseClass($content);
 	}
 
@@ -329,30 +298,27 @@ class PdfController extends AbstractPLugin {
 
 		$cachingEnabled = $this->isCachingEnabled();
 
-		if ($cachingEnabled && $this->cacheManager->isInCache($urls)) {
-			$fileIdentifier = $this->cacheManager->get($urls);
-			/** @var \TYPO3\CMS\Core\Resource\File $pdfFile */
-			$pdfFile = $this->outputDirectory->getStorage()->getFile($fileIdentifier);
-			if (isset($pdfFile) && !$pdfFile->isMissing()) {
+		if ($cachingEnabled) {
+			$pdfFile = $this->cacheManager->get($urls);
+			if (isset($pdfFile)) {
 				return $pdfFile;
-			} else {
-				$this->cacheManager->remove($urls);
 			}
 		}
 
-		$this->tempFile = GeneralUtility::tempnam('tx_webkitpdf_temp_' . sha1(uniqid('tx_webkitpdf_temp_', TRUE)));
+		$tempFile = GeneralUtility::tempnam('tx_webkitpdf_temp_' . sha1(uniqid('tx_webkitpdf_temp_', TRUE)));
 
 		$pdfGenerator = $this->getPdfGenerator();
-		$pdfGenerator->generatePdf($urls, $this->tempFile);
+		$pdfGenerator->generatePdf($urls, $tempFile);
 
-		if (filesize($this->tempFile) > 0) {
-			$pdfFile = $this->outputDirectory->addFile($this->tempFile, $this->filenameStorage, 'changeName');
+		if (filesize($tempFile) > 0) {
+			$pageUids = !empty($this->piVars['pageUids']) && is_array($this->piVars['pageUids']) ? $this->piVars['pageUids'] : array();
+			$pdfFile = $this->cacheManager->store($urls, $tempFile, $pageUids, $cachingEnabled);
 		} else {
 			throw new \RuntimeException('The PDF generator did not fill the PDF file with contents.');
 		}
 
-		if ($cachingEnabled) {
-			$this->cacheManager->store($urls, $pdfFile->getIdentifier(), $this->getRelatedPageUids());
+		if (!file_exists($tempFile)) {
+			GeneralUtility::unlink_tempfile($tempFile);
 		}
 
 		return $pdfFile;
@@ -367,22 +333,6 @@ class PdfController extends AbstractPLugin {
 		$pdfGenerator = GeneralUtility::makeInstance(PdfGeneratorFactory::class)->getPdfGeneratorForConfig($this->conf);
 		$this->initializeScriptOptions($pdfGenerator);
 		return $pdfGenerator;
-	}
-
-	/**
-	 * Returns an array containing the UIDs to which the currently generated PDF document belongs.
-	 *
-	 * @return array
-	 */
-	protected function getRelatedPageUids() {
-
-		$pageUids = array();
-
-		if (!empty($this->options['relatedPageUids'])) {
-			GeneralUtility::trimExplode(',', $this->options['relatedPageUids'], TRUE);
-		}
-
-		return $pageUids;
 	}
 
 	/**
