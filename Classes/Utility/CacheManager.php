@@ -102,7 +102,7 @@ class CacheManager {
 	 * Removes the entry for the given URLs from the cache.
 	 *
 	 * @param array $urls Array of the URLs that should be retrieved by the PDF generator.
-	 * @return string The PDF file contents.
+	 * @return void
 	 */
 	public function remove(array $urls) {
 		$entryIdentifier = $this->getEntryIdentifier($urls);
@@ -163,9 +163,17 @@ class CacheManager {
 
 		$tempHtaccess = GeneralUtility::tempnam(static::CACHE_IDENTIFIER, 'cache_htaccess');
 		file_put_contents($tempHtaccess, 'Deny from all');
-		$folder->addFile($tempHtaccess, '.htaccess');
-		GeneralUtility::unlink_tempfile($tempHtaccess);
-	}
+
+        // We need to disable the fileDenyPattern because it won't allow us to write a .htaccess file.
+        $fileDenyPatternBackup = $GLOBALS['TYPO3_CONF_VARS']['BE']['fileDenyPattern'];
+        $GLOBALS['TYPO3_CONF_VARS']['BE']['fileDenyPattern'] = '';
+
+        $folder->addFile($tempHtaccess, '.htaccess');
+
+        $GLOBALS['TYPO3_CONF_VARS']['BE']['fileDenyPattern'] = $fileDenyPatternBackup;
+
+        GeneralUtility::unlink_tempfile($tempHtaccess);
+    }
 
 	/**
 	 * Makes sure the configured PDF document cache directory exists in the configured storage
