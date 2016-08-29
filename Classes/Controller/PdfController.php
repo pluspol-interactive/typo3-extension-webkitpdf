@@ -37,7 +37,7 @@ use TYPO3\CMS\Frontend\Plugin\AbstractPlugin;
  *
  * @author Reinhard Führicht <rf@typoheads.at>
  */
-class PdfController extends AbstractPLugin {
+class PdfController extends AbstractPlugin {
 
 	/**
 	 * Should be same as classname of the plugin, used for CSS classes, variables
