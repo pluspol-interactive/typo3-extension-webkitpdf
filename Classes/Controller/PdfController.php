@@ -156,8 +156,8 @@ class PdfController extends AbstractPlugin {
 		}
 		unset($conf['pdfGenerators.']);
 
-		$this->conf = $conf;
-		$this->options = $conf['options'];
+		$this->conf = $this->processStdWraps($conf);
+		$this->options = $this->conf['options'];
 
 		$this->pi_setPiVarDefaults();
 
