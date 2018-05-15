@@ -317,7 +317,7 @@ class PdfController extends AbstractPlugin {
 			throw new \RuntimeException('The PDF generator did not fill the PDF file with contents.');
 		}
 
-		if (!file_exists($tempFile)) {
+		if (file_exists($tempFile)) {
 			GeneralUtility::unlink_tempfile($tempFile);
 		}
 
