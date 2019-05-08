@@ -299,10 +299,6 @@ class PdfController extends AbstractPlugin {
 	 */
 	protected function generatePdfOrReadFromCache(array $urls) {
 
-        if(!is_dir(PATH_site . '/typo3temp/tx_webkitpdf/')) {
-            GeneralUtility::mkdir_deep(PATH_site . '/typo3temp/tx_webkitpdf/');
-        }
-
 		$cachingEnabled = $this->isCachingEnabled();
 
 		if ($cachingEnabled) {
