@@ -1,0 +1,7 @@
+<?php
+
+\TYPO3\CMS\Core\Utility\ExtensionManagementUtility::addPlugin(
+    ['LLL:EXT:webkitpdf/Resource/Private/Language/locallang_db.xml:tt_content.list_type_pi1', 'webkitpdf_pi1'],
+    'list_type',
+    'webkitpdf'
+);
