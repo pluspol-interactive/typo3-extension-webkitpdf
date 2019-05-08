@@ -24,6 +24,7 @@ namespace Tx\Webkitpdf\Utility;
  *  This copyright notice MUST APPEAR in all copies of the script!
  ***************************************************************/
 
+use TYPO3\CMS\Core\Resource\DuplicationBehavior;
 use TYPO3\CMS\Core\Resource\File;
 use TYPO3\CMS\Core\Resource\ResourceFactory;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
@@ -128,11 +129,11 @@ class CacheManager {
 	public function store(array $urls, $tempFile, $pageIds = array(), $cachingEnabled) {
 
 		$entryIdentifier = $this->getEntryIdentifier($urls);
-		$conflictMode = 'replace';
+		$conflictMode = DuplicationBehavior::REPLACE;
 
 		if (!$cachingEnabled) {
 			$entryIdentifier = uniqid($entryIdentifier, TRUE);
-			$conflictMode = 'changeName';
+			$conflictMode = DuplicationBehavior::RENAME;
 		}
 
 		$file = $this->getCacheDirectory()->addFile($tempFile, $entryIdentifier, $conflictMode);

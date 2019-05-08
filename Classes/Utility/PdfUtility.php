@@ -69,7 +69,7 @@ class PdfUtility implements SingletonInterface {
 				$frontendController->fe_user->id . '-' .
 				md5(
 					$frontendController->fe_user->id . '/' .
-					$frontendController->TYPO3_CONF_VARS['SYS']['encryptionKey']
+					$GLOBALS['TYPO3_CONF_VARS']['SYS']['encryptionKey']
 				)
 			);
 		// Add the session parameter ...
