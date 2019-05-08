@@ -27,6 +27,7 @@ namespace Tx\Webkitpdf\Controller;
 use Tx\Webkitpdf\Generator\PdfGeneratorFactory;
 use Tx\Webkitpdf\Utility\CacheManager;
 use Tx\Webkitpdf\Utility\PdfUtility;
+use TYPO3\CMS\Core\Crypto\Random;
 use TYPO3\CMS\Core\Utility\GeneralUtility;
 use TYPO3\CMS\Core\Utility\HttpUtility;
 use TYPO3\CMS\Frontend\ContentObject\ContentObjectRenderer;
@@ -165,7 +166,9 @@ class PdfController extends AbstractPlugin {
 			$this->paramName = $this->options['customParameterName'];
 		}
 
-		$this->filenameStorage = $this->filenameDownload = $this->options['filePrefix'] . GeneralUtility::hmac(GeneralUtility::generateRandomBytes(512), 'TxWebkitpdfPdfFilename') . '.pdf';
+		$randomBytes = GeneralUtility::makeInstance(Random::class)->generateRandomBytes(512);
+
+		$this->filenameStorage = $this->filenameDownload = $this->options['filePrefix'] . GeneralUtility::hmac($randomBytes, 'TxWebkitpdfPdfFilename') . '.pdf';
 		if (!empty($this->options['staticFileName'])) {
 			$this->filenameDownload = $this->pdfUtility->sanitizeFilename($this->options['staticFileName']);
 		}
