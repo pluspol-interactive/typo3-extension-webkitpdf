@@ -5,3 +5,5 @@
     'list_type',
     'webkitpdf'
 );
+
+$GLOBALS['TCA']['tt_content']['types']['list']['subtypes_excludelist']['webkitpdf_pi1'] = 'layout,pages,select_key';
